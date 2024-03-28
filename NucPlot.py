@@ -8,21 +8,19 @@ import argparse
 import matplotlib
 import scipy.signal
 
-matplotlib.use("agg")
 import portion as pt
 import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import seaborn as sns
 import multiprocessing as mp
 
 from enum import StrEnum, auto
 from typing import Generator, Any
 
+matplotlib.use("agg")
 warnings.filterwarnings("ignore")
 
-PLOT_COLORS = sns.color_palette()
+# PLOT_COLORS = sns.color_palette()
 PLOT_FONT_SIZE = 16
 PLOT_REGION_HEIGHT = 5
 PLOT_WIDTH = 16
@@ -61,12 +59,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-r", "--regions", nargs="*", help="Regions with the format: (.*):(\\d+)-(\\d+)"
-    )
-    parser.add_argument(
-        "--input_repeatmasker",
-        help="Input RepeatMasker output file to add to plot.",
-        type=str,
-        default=None,
     )
     parser.add_argument(
         "-t", "--threads", default=4, help="Threads for reading bam file."
@@ -131,92 +123,14 @@ def read_regions(
             yield (contig, refs[contig][0], refs[contig][1])
 
 
-def read_repeatmasker(input_rm: str) -> pl.DataFrame | None:
-    rm_output = None
-    if input_rm is not None:
-        names = [
-            "score",
-            "perdiv",
-            "perdel",
-            "perins",
-            "qname",
-            "start",
-            "end",
-            "left",
-            "strand",
-            "repeat",
-            "family",
-            "rstart",
-            "rend",
-            "rleft",
-            "ID",
-        ]
-
-        rm_output = (
-            pl.scan_csv(
-                input_rm,
-                skip_rows=3,
-                has_header=False,
-                new_columns=names,
-                dtypes={"start": pl.Int64, "end": pl.Int64},
-            )
-            .with_columns(label=pl.col("family").str.replace("/.*", ""))
-            .collect()
-        )
-
-        cmap = {
-            lab: PLOT_COLORS[idx % len(PLOT_COLORS)]
-            for idx, lab in enumerate(sorted(rm_output["label"].unique()))
-        }
-
-        rm_output = rm_output.with_columns(color=pl.col("label").replace(cmap))
-
-    return rm_output
-
-
 def plot_coverage(
     df: pl.DataFrame,
     contig_name: str,
-    rm_output: pl.DataFrame | None,
 ) -> tuple[plt.Figure, Any]:
     ylim = 100
 
     # get the correct axis
     fig, ax = plt.subplots(figsize=(PLOT_WIDTH, PLOT_REGION_HEIGHT))
-
-    if rm_output:
-        rmax = ax
-        sys.stderr.write("Subsetting the repeatmasker file.\n")
-        rm = rm_output.filter(
-            (pl.col("qname") == contig_name)
-            & (pl.col("start") >= df["position"].min())
-            & (pl.col("end") <= df["position"].max())
-        )
-        assert len(rm.shape[0]) != 0, "No matching RM contig"
-
-        rmlength = len(rm.shape[0]) * 1.0
-        height_offset = ylim / 20
-        for rmcount, row in enumerate(rm.iter_rows(named=True)):
-            sys.stderr.write(
-                "\rDrawing the {} repeatmasker rectangles:\t{:.2%}".format(
-                    rmlength, rmcount / rmlength
-                )
-            )
-            width = row["end"] - row["start"]
-            rect = patches.Rectangle(
-                (row["start"], ylim - height_offset),
-                width,
-                height_offset,
-                linewidth=1,
-                edgecolor="none",
-                facecolor=row["color"],
-                alpha=0.75,
-            )
-            rmax.add_patch(rect)
-
-        sys.stderr.write("\nPlotting the repeatmasker rectangles.\n")
-        plt.show()
-        sys.stderr.write("Done plotting the repeatmasker rectangles.\n")
 
     (prime,) = ax.plot(
         df["position"],
@@ -415,7 +329,6 @@ def classify_plot_assembly(
     contig: str,
     start: int,
     end: int,
-    rm_output: pl.DataFrame,
 ) -> pl.DataFrame:
     bam = pysam.AlignmentFile(infile, threads=threads)
     contig_name = f"{contig}:{start}-{end}"
@@ -430,7 +343,7 @@ def classify_plot_assembly(
     )
 
     if output_dir:
-        _ = plot_coverage(df_group_labeled, contig, rm_output)
+        _ = plot_coverage(df_group_labeled, contig)
 
         sys.stderr.write(f"Plotted {contig_name}.\n")
 
@@ -462,14 +375,11 @@ def main():
     # set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
-    # Read repeatmasker. UNTESTED.
-    rm_output = read_repeatmasker(args.input_repeatmasker)
-
     with mp.Pool(processes=args.processes) as pool:
         results = pool.starmap(
             classify_plot_assembly,
             [
-                (args.input_bam, args.output_dir, args.threads, *region, rm_output)
+                (args.input_bam, args.output_dir, args.threads, *region)
                 for region in regions
             ],
         )
