@@ -1,19 +1,22 @@
 #!/usr/bin/env python
 import re
+import os
 import sys
 import pysam
 import warnings
 import argparse
 import matplotlib
+import scipy.signal
 
 matplotlib.use("agg")
+import portion as pt
 import numpy as np
-import pandas as pd
+import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import seaborn as sns
 
-from typing import Generator
+from typing import Generator, Any
 
 warnings.filterwarnings("ignore")
 
@@ -26,14 +29,14 @@ PLOT_DPI = 600
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Use nucleotide coverage to classify misassemblies.",
+        description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("-i", "--infile", help="Input bam file.")
     parser.add_argument(
         "-o",
-        "--outfile",
-        help="Output plot file.",
+        "--output",
+        help="Output plot file or plot dir. If dir, each contig is generated as an individual plot.",
         required=False,
         default="nucplot.png",
     )
@@ -48,6 +51,9 @@ def parse_args() -> argparse.Namespace:
         "--regions", nargs="*", help="Regions with the format: (.*):(\\d+)-(\\d+)"
     )
     parser.add_argument("--bed", default=None, help="Bed file with regions to plot.")
+    parser.add_argument(
+        "--obed", default=None, help="Bed file with misassembled regions."
+    )
     parser.add_argument("--threads", default=4, help="Threads for reading bam file.")
 
     return parser.parse_args()
@@ -106,9 +112,8 @@ def read_regions(
             yield (contig, refs[contig][0], refs[contig][1])
 
 
-def read_repeatmasker(args: argparse.Namespace) -> pd.DataFrame | None:
-    RM = None
-    cmap = {}
+def read_repeatmasker(args: argparse.Namespace) -> pl.DataFrame | None:
+    rm_output = None
     if args.repeatmasker is not None:
         names = [
             "score",
@@ -127,79 +132,75 @@ def read_repeatmasker(args: argparse.Namespace) -> pd.DataFrame | None:
             "rleft",
             "ID",
         ]
-        lines = []
-        for idx, line in enumerate(args.repeatmasker):
-            if idx > 2:
-                lines.append(line.strip().split()[0:15])
 
-        RM = pd.DataFrame(lines, columns=names)
-        RM.start = RM.start.astype(int)
-        RM.end = RM.end.astype(int)
-        RM["label"] = RM.family.str.replace("/.*", "")
-        for idx, lab in enumerate(sorted(RM.label.unique())):
-            cmap[lab] = PLOT_COLORS[idx % len(PLOT_COLORS)]
-        RM["color"] = RM.label.map(cmap)
+        rm_output = (
+            pl.scan_csv(
+                args.repeatmasker,
+                skip_rows=3,
+                has_header=False,
+                new_columns=names,
+                dtypes={"start": pl.Int64, "end": pl.Int64},
+            )
+            .with_columns(label=pl.col("family").str.replace("/.*", ""))
+            .collect()
+        )
+
+        cmap = {
+            lab: PLOT_COLORS[idx % len(PLOT_COLORS)]
+            for idx, lab in enumerate(sorted(rm_output["label"].unique()))
+        }
+
+        rm_output = rm_output.with_columns(color=pl.col("label").replace(cmap))
 
         args.repeatmasker.close()
 
-    return RM
+    return rm_output
 
 
 def plot_coverage(
-    axs,
+    axs: Any | None,
+    output: str | None,
     group_n: int,
     contig_name: str,
     first: np.ndarray,
     second: np.ndarray,
     truepos: np.ndarray,
-    rm_output: pd.DataFrame | None,
+    rm_output: pl.DataFrame | None,
 ):
     ylim = int(first.max() * 1.05)
 
-    # if args.obed:
-    #     tmp = group.loc[
-    #         group.second >= args.minobed,
-    #         ["contig", "position", "position", "first", "second"],
-    #     ]
-    #     if counter == 0:
-    #         tmp.to_csv(
-    #             args.obed,
-    #             header=["#contig", "start", "end", "first", "second"],
-    #             sep="\t",
-    #             index=False,
-    #         )
-    #     else:
-    #         tmp.to_csv(args.obed, mode="a", header=None, sep="\t", index=False)
-
     # get the correct axis
-    ax = axs[group_n]
+    if axs:
+        ax = axs[group_n]
+    else:
+        fig, ax = plt.subplots(figsize=(PLOT_WIDTH, PLOT_REGION_HEIGHT))
 
     if rm_output:
         rmax = ax
-        sys.stderr.write("Subsetting the repeatmakser file.\n")
-        rm = rm_output[
-            (rm_output.qname == contig_name)
-            & (rm_output.start >= min(truepos))
-            & (rm_output.end <= max(truepos))
-        ]
-        assert len(rm.index) != 0, "No matching RM contig"
+        sys.stderr.write("Subsetting the repeatmasker file.\n")
+        rm = rm_output.filter(
+            (pl.col("qname") == contig_name)
+            & (pl.col("start") >= min(truepos))
+            & (pl.col("end") <= max(truepos))
+        )
+        assert len(rm.shape[0]) != 0, "No matching RM contig"
 
-        rmlength = len(rm.index) * 1.0
+        rmlength = len(rm.shape[0]) * 1.0
         height_offset = ylim / 20
-        for rmcount, row in enumerate(rm.iterrows()):
+        for rmcount, row in enumerate(rm.iter_rows(named=True)):
             sys.stderr.write(
                 "\rDrawing the {} repeatmasker rectangles:\t{:.2%}".format(
                     rmlength, rmcount / rmlength
                 )
             )
-            width = row.end - row.start
+            width = row["end"] - row["start"]
             rect = patches.Rectangle(
-                (row.start, ylim - height_offset),
+                (row["start"], ylim - height_offset),
                 width,
                 height_offset,
                 linewidth=1,
                 edgecolor="none",
-                facecolor=row.color,
+                facecolor=row["color"],
                 alpha=0.75,
             )
             rmax.add_patch(rect)
@@ -264,6 +265,96 @@ def plot_coverage(
     sys.stderr.write(f"Added contig, {title}, to plot.\n")
 
 
+def peak_finder(
+    data: np.ndarray,
+    positions: np.ndarray,
+    *,
+    height: int,
+    added_region_bounds: int,
+    distance: int = 100_000,
+    width: int = 500,
+) -> list[pt.Interval]:
+    _, peak_info = scipy.signal.find_peaks(
+        data, height=height, distance=distance, width=width
+    )
+    return [
+        pt.open(
+            positions[int(left_pos)] - added_region_bounds,
+            positions[int(right_pos)] + added_region_bounds,
+        )
+        for left_pos, right_pos in zip(peak_info["left_ips"], peak_info["right_ips"])
+    ]
+
+
+# https://stackoverflow.com/a/7353335
+def consecutive(data, stepsize: int = 1):
+    return np.split(data, np.where((np.diff(data) <= stepsize) == False)[0] + 1)  # noqa: E712
+
+
+def classify_misassemblies(
+    cov_first_second: np.ndarray,
+    positions: np.ndarray,
+    *,
+    added_region_bounds: int = 100_000,
+) -> pl.DataFrame:
+    first: np.ndarray = cov_first_second[0]
+    second: np.ndarray = cov_first_second[1]
+    del cov_first_second
+
+    # Calculate std and mean for both most and second most freq read.
+    mean_first, stdev_first = first.mean(), first.std()
+    mean_second, stdev_second = second.mean(), second.std()
+
+    first_peak_coords = peak_finder(
+        first,
+        positions,
+        height=mean_first + (3 * stdev_first),
+        added_region_bounds=added_region_bounds,
+    )
+    first_valley_coords = peak_finder(
+        -first,
+        positions,
+        height=-(mean_first - (3 * stdev_first)),
+        added_region_bounds=added_region_bounds,
+    )
+
+    # Remove secondary rows that don't meet minimal secondary coverage.
+    second_thr = max(round(mean_first * 0.1), round(mean_second + (3 * stdev_second)))
+
+    second_outliers, *_ = np.where(second > second_thr)
+    # Group consecutive positions allowing a maximum gap of stepsize.
+    second_outliers_coords = [
+        pt.open(positions[grp[0]], positions[grp[-1]])
+        for grp in consecutive(second_outliers, stepsize=10_000)
+        if len(grp) > 5
+    ]
+
+    # Intersect intervals and classify.
+    collapse_w_no_variant = []
+    collapse_w_variant: set[pt.Interval] = set()
+    for peak in first_peak_coords:
+        for second_outlier in second_outliers_coords:
+            if second_outlier in peak:
+                collapse_w_variant.add(peak)
+
+        if peak not in collapse_w_variant:
+            collapse_w_no_variant.append(peak)
+
+    # TODO: Gaps here?
+    raise NotImplementedError
+
+    misjoins: list[pt.Interval] = [
+        valley
+        for valley in first_valley_coords
+        for second_outlier in second_outliers_coords
+        if second_outlier in valley
+    ]
+    print(misjoins)
+    # TODO: false dupes
+
+    return pl.DataFrame()
+
+
 def main():
     args = parse_args()
     bam = pysam.AlignmentFile(args.infile, threads=args.threads)
@@ -276,39 +367,39 @@ def main():
     # set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
+    # TODO: Change so plot fn returns figure and generate subplot at end.
     # make axes
-    fig, axs = plt.subplots(nrows=num_regions, ncols=1, figsize=(PLOT_WIDTH, height))
-    if num_regions == 1:
-        axs = [axs]
-    figsize = fig.get_size_inches() * PLOT_DPI
+    fig, axs = None, None
+    output_dir = args.output if os.path.isdir(args.output) else None
+    if not output_dir:
+        fig, axs = plt.subplots(
+            nrows=num_regions, ncols=1, figsize=(PLOT_WIDTH, height)
+        )
+        if num_regions == 1:
+            axs = [axs]
+        figsize = fig.get_size_inches() * PLOT_DPI
 
-    if (figsize > (2**16)).any():
-        raise ValueError("Too many regions provided. Reduce the number of regions.")
+        if (figsize > (2**16)).any():
+            raise ValueError("Too many regions provided. Reduce the number of regions.")
 
-    # # make space for the bottom label of the plot
-    # # fig.subplots_adjust(bottom=0.2)
-    # # set figure YLIM
-    # YLIM = int(max(df["first"]) * 1.05)
-
-    rm_output = read_repeatmasker(args)
+    # rm_output = read_repeatmasker(args)
 
     for group_n, (contig, start, end) in enumerate(regions):
         sys.stderr.write(
             "Reading in NucFreq from region: {}:{}-{}\n".format(contig, start, end)
         )
 
-        sorted_cov = np.flip(
-            np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
-        ).transpose()
+        df_group_labeled = classify_misassemblies(
+            np.flip(
+                np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
+            ).transpose(),
+            np.arange(start, end),
+        )
+        print(df_group_labeled)
+        # plot_coverage(axs, output_dir, group_n, contig, first, second, position, rm_output)
 
-        first: np.ndarray = sorted_cov[0]
-        second: np.ndarray = sorted_cov[1]
-        position = np.arange(start, end)
-
-        plot_coverage(axs, group_n, contig, first, second, position, rm_output)
-
-    plt.tight_layout()
-    plt.savefig(args.outfile, dpi=PLOT_DPI)
+    # plt.tight_layout()
+    # plt.savefig(args.outfile, dpi=PLOT_DPI)
 
 
 if __name__ == "__main__":
