@@ -49,13 +49,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-o",
         "--output_dir",
+        default=None,
         help="Output plot dir.",
-        default="plots",
     )
     parser.add_argument(
         "-m",
         "--output_bed",
-        default=None,
+        default=sys.stdout,
+        type=argparse.FileType("wt"),
         help="Output bed file with misassembled regions.",
     )
     parser.add_argument(
@@ -409,7 +410,7 @@ def classify_misassemblies(
 
 def classify_plot_assembly(
     infile: str,
-    output_dir: str,
+    output_dir: str | None,
     threads: int,
     contig: str,
     start: int,
@@ -427,13 +428,15 @@ def classify_plot_assembly(
         ).transpose(),
         np.arange(start, end),
     )
-    _ = plot_coverage(df_group_labeled, contig, rm_output)
 
-    sys.stderr.write(f"Plotted {contig_name}.\n")
+    if output_dir:
+        _ = plot_coverage(df_group_labeled, contig, rm_output)
 
-    output_plot = os.path.join(output_dir, f"{contig_name}.png")
-    plt.tight_layout()
-    plt.savefig(output_plot, dpi=PLOT_DPI)
+        sys.stderr.write(f"Plotted {contig_name}.\n")
+
+        output_plot = os.path.join(output_dir, f"{contig_name}.png")
+        plt.tight_layout()
+        plt.savefig(output_plot, dpi=PLOT_DPI)
 
     df_misassemblies = pl.DataFrame(
         [
@@ -448,7 +451,8 @@ def classify_plot_assembly(
 
 def main():
     args = parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
 
     # Read regions and close file handle to bam.
     bam = pysam.AlignmentFile(args.input_bam, threads=args.threads)
@@ -471,9 +475,8 @@ def main():
         )
 
     # Save misassemblies to output bed
-    if args.output_bed:
-        all_misasm = pl.concat(results).sort(by=["contig", "start"])
-        all_misasm.write_csv(file=args.output_bed, include_header=False, separator="\t")
+    all_misasm = pl.concat(results).sort(by=["contig", "start"])
+    all_misasm.write_csv(file=args.output_bed, include_header=False, separator="\t")
 
 
 if __name__ == "__main__":

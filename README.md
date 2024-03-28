@@ -30,6 +30,13 @@ options:
                         Processes for classifying/plotting. (default: 4)
 ```
 
+# Test
+Test BAM filtered from merged alignment of:
+* PacBio HiFi reads from HGSVC sample `HG00096`.
+  * https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/HGSVC3/working/20220831_JAX_HiFi/HG00096/
+* Verkko v1.4.1 combined assembly for HGSVC sample `HG00096`
+  * https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/HGSVC3/working/20240201_verkko_batch3/assemblies/HG00096/
+
 
 ## Cite
  - **Vollger MR**, Dishuck PC, Sorensen M, Welch AE, Dang V, Dougherty ML, et al. Long-read sequence and assembly of segmental duplications. Nat Methods. 2019;16: 88–94. doi:10.1038/s41592-018-0236-3
