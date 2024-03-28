@@ -20,11 +20,11 @@ from typing import Generator, Any
 matplotlib.use("agg")
 warnings.filterwarnings("ignore")
 
-# PLOT_COLORS = sns.color_palette()
 PLOT_FONT_SIZE = 16
-PLOT_REGION_HEIGHT = 5
+PLOT_HEIGHT = 6
 PLOT_WIDTH = 16
 PLOT_DPI = 600
+PLOT_YLIM = 100
 
 
 class Misassembly(StrEnum):
@@ -34,24 +34,39 @@ class Misassembly(StrEnum):
     GAP = auto()
     FALSE_DUP = auto()
 
+    def as_color(self) -> str:
+        match self:
+            case self.COLLAPSE_VAR:
+                return "blue"
+            case self.COLLAPSE:
+                return "green"
+            case self.MISJOIN:
+                return "yellow"
+            case self.GAP:
+                return "gray"
+            case self.FALSE_DUP:
+                return "purple"
+            case _:
+                raise ValueError(f"Invalid color {self}")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-i", "--input_bam", help="Input bam file.")
+    parser.add_argument("-i", "--input_bam", help="Input bam file. Must be indexed.")
     parser.add_argument(
         "-b", "--input_bed", default=None, help="Bed file with regions to plot."
     )
     parser.add_argument(
-        "-o",
-        "--output_dir",
+        "-d",
+        "--output_plot_dir",
         default=None,
         help="Output plot dir.",
     )
     parser.add_argument(
-        "-m",
+        "-o",
         "--output_bed",
         default=sys.stdout,
         type=argparse.FileType("wt"),
@@ -86,8 +101,9 @@ def read_regions(
     refs = {}
 
     if args.regions is not None or args.input_bed is not None:
-        sys.stderr.write("Reading in the region or bed argument(s).\n")
         if args.regions is not None:
+            sys.stderr.write(f"Reading in {len(args.regions)} region(s).\n")
+
             for region in args.regions:
                 match = re.match(r"(.+):(\d+)-(\d+)", region)
                 assert match, region + " not valid!"
@@ -96,6 +112,8 @@ def read_regions(
                 yield (chrm, int(start), int(end))
 
         if args.input_bed is not None:
+            sys.stderr.write(f"Reading in region(s) from {args.input_bed}.\n")
+
             for line in open(args.input_bed):
                 if line[0] == "#":
                     continue
@@ -125,30 +143,51 @@ def read_regions(
 
 def plot_coverage(
     df: pl.DataFrame,
+    misassemblies: dict[Misassembly, set[pt.Interval]],
     contig_name: str,
 ) -> tuple[plt.Figure, Any]:
-    ylim = 100
+    fig, ax = plt.subplots(figsize=(PLOT_WIDTH, PLOT_HEIGHT))
 
-    # get the correct axis
-    fig, ax = plt.subplots(figsize=(PLOT_WIDTH, PLOT_REGION_HEIGHT))
-
-    (prime,) = ax.plot(
+    (_,) = ax.plot(
         df["position"],
         df["first"],
         "o",
         color="black",
         markeredgewidth=0.0,
         markersize=2,
-        label="most frequent base pair",
+        label="Most Frequent Base",
     )
-    (sec,) = ax.plot(
+    (_,) = ax.plot(
         df["position"],
         df["second"],
         "o",
         color="red",
         markeredgewidth=0.0,
         markersize=2,
-        label="second most frequent base pair",
+        label="Second Most Frequent Base",
+    )
+
+    # Add misassembly rect patches to highlight region.
+    for misasm, regions in misassemblies.items():
+        color = misasm.as_color()
+        for region in regions:
+            plt.axvspan(
+                region.lower, region.upper, color=color, alpha=0.4, label=misasm
+            )
+
+    # Add legend. Deduplicate multiple labels.
+    # https://stackoverflow.com/a/36189073
+    handles, labels = plt.gca().get_legend_handles_labels()
+    labels, ids = np.unique(labels, return_index=True)
+    handles = [handles[i] for i in ids]
+    plt.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.2),
+        ncols=len(labels),
+        borderaxespad=0,
+        fancybox=True,
     )
 
     maxval = df["position"].max()
@@ -158,32 +197,29 @@ def plot_coverage(
     title = "{}:{}-{}\n".format(contig_name, minval, maxval)
     ax.set_title(title, fontweight="bold")
 
-    if maxval < 1000000:
+    if maxval < 1_000_000:
         xlabels = [format((label - subval), ",.0f") for label in ax.get_xticks()]
         lab = "bp"
-    elif maxval < 10000000:
+    elif maxval < 10_000_000:
         xlabels = [format((label - subval) / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
     else:
         xlabels = [format((label - subval) / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, ylim)
-
+    ax.set_ylim(0, PLOT_YLIM)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
-
-    # Including this causes some internal bug in matplotlib when the font-size changes
-    # ylabels = [format(label, ",.0f") for label in ax.get_yticks()]
-    # ax.set_yticklabels(ylabels)
     ax.set_xticklabels(xlabels)
 
     # Hide the right and top spines
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
+
     # Only show ticks on the left and bottom spines
     ax.yaxis.set_ticks_position("left")
     ax.xaxis.set_ticks_position("bottom")
+    fig.tight_layout()
 
     return fig, ax
 
@@ -343,7 +379,7 @@ def classify_plot_assembly(
     )
 
     if output_dir:
-        _ = plot_coverage(df_group_labeled, contig)
+        _ = plot_coverage(df_group_labeled, miassemblies, contig)
 
         sys.stderr.write(f"Plotted {contig_name}.\n")
 
@@ -364,8 +400,8 @@ def classify_plot_assembly(
 
 def main():
     args = parse_args()
-    if args.output_dir:
-        os.makedirs(args.output_dir, exist_ok=True)
+    if args.output_plot_dir:
+        os.makedirs(args.output_plot_dir, exist_ok=True)
 
     # Read regions and close file handle to bam.
     bam = pysam.AlignmentFile(args.input_bam, threads=args.threads)
@@ -379,7 +415,7 @@ def main():
         results = pool.starmap(
             classify_plot_assembly,
             [
-                (args.input_bam, args.output_dir, args.threads, *region)
+                (args.input_bam, args.output_plot_dir, args.threads, *region)
                 for region in regions
             ],
         )

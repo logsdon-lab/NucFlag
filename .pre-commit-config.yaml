@@ -20,4 +20,4 @@ repos:
     -   id: mypy
         args: [--ignore-missing-imports]
 
-exclude: ".*\\.bam"
+exclude: ".*\\.bam|.*\\.png"
