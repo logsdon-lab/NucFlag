@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import seaborn as sns
 
+from enum import StrEnum, auto
 from typing import Generator, Any
 
 warnings.filterwarnings("ignore")
@@ -25,6 +26,14 @@ PLOT_FONT_SIZE = 16
 PLOT_REGION_HEIGHT = 4
 PLOT_WIDTH = 16
 PLOT_DPI = 600
+
+
+class Misassembly(StrEnum):
+    COLLAPSE_VAR = auto()
+    COLLAPSE = auto()
+    MISJOIN = auto()
+    GAP = auto()
+    FALSE_DUP = auto()
 
 
 def parse_args() -> argparse.Namespace:
@@ -158,16 +167,14 @@ def read_repeatmasker(args: argparse.Namespace) -> pl.DataFrame | None:
 
 
 def plot_coverage(
+    df: pl.DataFrame,
     axs: Any | None,
     output: str | None,
     group_n: int,
     contig_name: str,
-    first: np.ndarray,
-    second: np.ndarray,
-    truepos: np.ndarray,
     rm_output: pl.DataFrame | None,
 ):
-    ylim = int(first.max() * 1.05)
+    ylim = int(df["first"].max() * 1.05)
 
     # get the correct axis
     if axs:
@@ -180,8 +187,8 @@ def plot_coverage(
         sys.stderr.write("Subsetting the repeatmasker file.\n")
         rm = rm_output.filter(
             (pl.col("qname") == contig_name)
-            & (pl.col("start") >= min(truepos))
-            & (pl.col("end") <= max(truepos))
+            & (pl.col("start") >= df["position"].min())
+            & (pl.col("end") <= df["position"].max())
         )
         assert len(rm.shape[0]) != 0, "No matching RM contig"
 
@@ -210,8 +217,8 @@ def plot_coverage(
         sys.stderr.write("Done plotting the repeatmasker rectangles.\n")
 
     (prime,) = ax.plot(
-        truepos,
-        first,
+        df["position"],
+        df["first"],
         "o",
         color="black",
         markeredgewidth=0.0,
@@ -219,8 +226,8 @@ def plot_coverage(
         label="most frequent base pair",
     )
     (sec,) = ax.plot(
-        truepos,
-        second,
+        df["position"],
+        df["second"],
         "o",
         color="red",
         markeredgewidth=0.0,
@@ -228,8 +235,8 @@ def plot_coverage(
         label="second most frequent base pair",
     )
 
-    maxval = max(truepos)
-    minval = min(truepos)
+    maxval = df["position"].max()
+    minval = df["position"].min()
     subval = 0
 
     title = "{}:{}-{}\n".format(contig_name, minval, maxval)
@@ -272,7 +279,7 @@ def peak_finder(
     height: int,
     added_region_bounds: int,
     distance: int = 100_000,
-    width: int = 500,
+    width: int = 20,
 ) -> list[pt.Interval]:
     _, peak_info = scipy.signal.find_peaks(
         data, height=height, distance=distance, width=width
@@ -295,24 +302,29 @@ def classify_misassemblies(
     cov_first_second: np.ndarray,
     positions: np.ndarray,
     *,
-    added_region_bounds: int = 100_000,
-) -> pl.DataFrame:
-    first: np.ndarray = cov_first_second[0]
-    second: np.ndarray = cov_first_second[1]
+    added_region_bounds: int = 0,
+) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
+    df = pl.DataFrame(
+        {
+            "position": positions,
+            "first": cov_first_second[0],
+            "second": cov_first_second[1],
+        }
+    )
     del cov_first_second
 
     # Calculate std and mean for both most and second most freq read.
-    mean_first, stdev_first = first.mean(), first.std()
-    mean_second, stdev_second = second.mean(), second.std()
+    mean_first, stdev_first = df["first"].mean(), df["first"].std()
+    mean_second, stdev_second = df["second"].mean(), df["second"].std()
 
     first_peak_coords = peak_finder(
-        first,
+        df["first"],
         positions,
-        height=mean_first + (3 * stdev_first),
+        height=mean_first * 2,
         added_region_bounds=added_region_bounds,
     )
     first_valley_coords = peak_finder(
-        -first,
+        -df["first"],
         positions,
         height=-(mean_first - (3 * stdev_first)),
         added_region_bounds=added_region_bounds,
@@ -321,38 +333,75 @@ def classify_misassemblies(
     # Remove secondary rows that don't meet minimal secondary coverage.
     second_thr = max(round(mean_first * 0.1), round(mean_second + (3 * stdev_second)))
 
-    second_outliers, *_ = np.where(second > second_thr)
+    classified_second_outliers = set()
+    df_second_outliers = df.filter(pl.col("second") > second_thr)
     # Group consecutive positions allowing a maximum gap of stepsize.
+    # Larger stepsize groups more positions.
     second_outliers_coords = [
-        pt.open(positions[grp[0]], positions[grp[-1]])
-        for grp in consecutive(second_outliers, stepsize=10_000)
+        pt.open(grp[0], grp[-1])
+        for grp in consecutive(df_second_outliers["position"], stepsize=25_000)
         if len(grp) > 5
     ]
 
-    # Intersect intervals and classify.
-    collapse_w_no_variant = []
-    collapse_w_variant: set[pt.Interval] = set()
+    misassemblies: dict[Misassembly, set[pt.Interval]] = {m: set() for m in Misassembly}
+
+    # Intersect intervals and classify collapses.
     for peak in first_peak_coords:
         for second_outlier in second_outliers_coords:
             if second_outlier in peak:
-                collapse_w_variant.add(peak)
+                misassemblies[Misassembly.COLLAPSE_VAR].add(peak)
+                classified_second_outliers.add(second_outlier)
 
-        if peak not in collapse_w_variant:
-            collapse_w_no_variant.append(peak)
+        if peak not in misassemblies[Misassembly.COLLAPSE_VAR]:
+            misassemblies[Misassembly.COLLAPSE].add(peak)
 
-    # TODO: Gaps here?
-    raise NotImplementedError
+    # Classify gaps.
+    df_gaps = df.filter(pl.col("first") == 0)
+    misassemblies[Misassembly.GAP] = set(
+        pt.open(grp[0], grp[-1]) for grp in consecutive(df_gaps["position"], stepsize=1)
+    )
 
-    misjoins: list[pt.Interval] = [
-        valley
-        for valley in first_valley_coords
-        for second_outlier in second_outliers_coords
-        if second_outlier in valley
-    ]
-    print(misjoins)
+    # Classify misjoins.
+    for valley in first_valley_coords:
+        for second_outlier in second_outliers_coords:
+            if second_outlier in valley:
+                misassemblies[Misassembly.MISJOIN].add(valley)
+                classified_second_outliers.add(second_outlier)
+
+    # Check remaining secondary regions not categorized.
+    for second_outlier in second_outliers_coords:
+        if second_outlier in classified_second_outliers:
+            continue
+
+        df_second_outlier = df.filter(
+            (pl.col("position") >= second_outlier.lower)
+            & (pl.col("position") <= second_outlier.upper)
+            & (pl.col("second") != 0)
+        )
+        df_second_outlier_het_ratio = df_second_outlier.mean().with_columns(
+            het_ratio=pl.col("second") / (pl.col("first") + pl.col("second"))
+        )
+        # Use het ratio to classfiy.
+        if df_second_outlier_het_ratio["het_ratio"][0] > 0.1:
+            misassemblies[Misassembly.COLLAPSE_VAR].add(second_outlier)
+        elif df_second_outlier_het_ratio["het_ratio"][0] < 0.4:
+            misassemblies[Misassembly.MISJOIN].add(second_outlier)
+
+    # Annotate df with misassembliy.
+    df = df.with_columns(status=pl.lit("Good"))
+    for mtype, regions in misassemblies.items():
+        for region in regions:
+            df = df.with_columns(
+                status=pl.when(
+                    (pl.col("position") >= region.lower)
+                    & (pl.col("position") <= region.upper)
+                )
+                .then(pl.lit(mtype))
+                .otherwise(pl.col("status"))
+            )
+
     # TODO: false dupes
-
-    return pl.DataFrame()
+    return df
 
 
 def main():
@@ -382,7 +431,7 @@ def main():
         if (figsize > (2**16)).any():
             raise ValueError("Too many regions provided. Reduce the number of regions.")
 
-    # rm_output = read_repeatmasker(args)
+    rm_output = read_repeatmasker(args)
 
     for group_n, (contig, start, end) in enumerate(regions):
         sys.stderr.write(
@@ -395,11 +444,12 @@ def main():
             ).transpose(),
             np.arange(start, end),
         )
-        print(df_group_labeled)
-        # plot_coverage(axs, output_dir, group_n, contig, first, second, position, rm_output)
 
-    # plt.tight_layout()
-    # plt.savefig(args.outfile, dpi=PLOT_DPI)
+        plot_coverage(df_group_labeled, axs, output_dir, group_n, contig, rm_output)
+
+    if not output_dir:
+        plt.tight_layout()
+        plt.savefig(args.output, dpi=PLOT_DPI)
 
 
 if __name__ == "__main__":
