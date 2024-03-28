@@ -5,7 +5,30 @@ Script for making nucleotide frequency plots and marking misassemblies.
 ![clean](imgs/image.png)
 
 # Usage
-WIP
+```bash
+usage: NucPlot.py [-h] [-i INPUT_BAM] [-b INPUT_BED] [-o OUTPUT_DIR] [-m OUTPUT_BED] [-r [REGIONS ...]] [--input_repeatmasker INPUT_REPEATMASKER] [-t THREADS] [-p PROCESSES]
+
+Use per-base read coverage to classify/plot misassemblies.
+
+options:
+  -h, --help            show this help message and exit
+  -i INPUT_BAM, --input_bam INPUT_BAM
+                        Input bam file. (default: None)
+  -b INPUT_BED, --input_bed INPUT_BED
+                        Bed file with regions to plot. (default: None)
+  -o OUTPUT_DIR, --output_dir OUTPUT_DIR
+                        Output plot dir. (default: plots)
+  -m OUTPUT_BED, --output_bed OUTPUT_BED
+                        Output bed file with misassembled regions. (default: None)
+  -r [REGIONS ...], --regions [REGIONS ...]
+                        Regions with the format: (.*):(\d+)-(\d+) (default: None)
+  --input_repeatmasker INPUT_REPEATMASKER
+                        Input RepeatMasker output file to add to plot. (default: None)
+  -t THREADS, --threads THREADS
+                        Threads for reading bam file. (default: 4)
+  -p PROCESSES, --processes PROCESSES
+                        Processes for classifying/plotting. (default: 4)
+```
 
 
 ## Cite

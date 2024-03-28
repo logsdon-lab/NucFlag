@@ -15,6 +15,7 @@ import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import seaborn as sns
+import multiprocessing as mp
 
 from enum import StrEnum, auto
 from typing import Generator, Any
@@ -23,7 +24,7 @@ warnings.filterwarnings("ignore")
 
 PLOT_COLORS = sns.color_palette()
 PLOT_FONT_SIZE = 16
-PLOT_REGION_HEIGHT = 4
+PLOT_REGION_HEIGHT = 5
 PLOT_WIDTH = 16
 PLOT_DPI = 600
 
@@ -41,29 +42,37 @@ def parse_args() -> argparse.Namespace:
         description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-i", "--infile", help="Input bam file.")
+    parser.add_argument("-i", "--input_bam", help="Input bam file.")
     parser.add_argument(
-        "-o",
-        "--output",
-        help="Output plot file or plot dir. If dir, each contig is generated as an individual plot.",
-        required=False,
-        default="nucplot.png",
+        "-b", "--input_bed", default=None, help="Bed file with regions to plot."
     )
     parser.add_argument(
-        "-r",
-        "--repeatmasker",
-        help="RepeatMasker output to add to plot.",
-        type=argparse.FileType("r"),
+        "-o",
+        "--output_dir",
+        help="Output plot dir.",
+        default="plots",
+    )
+    parser.add_argument(
+        "-m",
+        "--output_bed",
+        default=None,
+        help="Output bed file with misassembled regions.",
+    )
+    parser.add_argument(
+        "-r", "--regions", nargs="*", help="Regions with the format: (.*):(\\d+)-(\\d+)"
+    )
+    parser.add_argument(
+        "--input_repeatmasker",
+        help="Input RepeatMasker output file to add to plot.",
+        type=str,
         default=None,
     )
     parser.add_argument(
-        "--regions", nargs="*", help="Regions with the format: (.*):(\\d+)-(\\d+)"
+        "-t", "--threads", default=4, help="Threads for reading bam file."
     )
-    parser.add_argument("--bed", default=None, help="Bed file with regions to plot.")
     parser.add_argument(
-        "--obed", default=None, help="Bed file with misassembled regions."
+        "-p", "--processes", default=4, help="Processes for classifying/plotting."
     )
-    parser.add_argument("--threads", default=4, help="Threads for reading bam file.")
 
     return parser.parse_args()
 
@@ -83,7 +92,7 @@ def read_regions(
 ) -> Generator[tuple[str, int, int], None, None]:
     refs = {}
 
-    if args.regions is not None or args.bed is not None:
+    if args.regions is not None or args.input_bed is not None:
         sys.stderr.write("Reading in the region or bed argument(s).\n")
         if args.regions is not None:
             for region in args.regions:
@@ -93,8 +102,8 @@ def read_regions(
                 refs[chrm] = [int(start), int(end)]
                 yield (chrm, int(start), int(end))
 
-        if args.bed is not None:
-            for line in open(args.bed):
+        if args.input_bed is not None:
+            for line in open(args.input_bed):
                 if line[0] == "#":
                     continue
                 chrm, start, end, *_ = line.strip().split()
@@ -121,9 +130,9 @@ def read_regions(
             yield (contig, refs[contig][0], refs[contig][1])
 
 
-def read_repeatmasker(args: argparse.Namespace) -> pl.DataFrame | None:
+def read_repeatmasker(input_rm: str) -> pl.DataFrame | None:
     rm_output = None
-    if args.repeatmasker is not None:
+    if input_rm is not None:
         names = [
             "score",
             "perdiv",
@@ -144,7 +153,7 @@ def read_repeatmasker(args: argparse.Namespace) -> pl.DataFrame | None:
 
         rm_output = (
             pl.scan_csv(
-                args.repeatmasker,
+                input_rm,
                 skip_rows=3,
                 has_header=False,
                 new_columns=names,
@@ -161,26 +170,18 @@ def read_repeatmasker(args: argparse.Namespace) -> pl.DataFrame | None:
 
         rm_output = rm_output.with_columns(color=pl.col("label").replace(cmap))
 
-        args.repeatmasker.close()
-
     return rm_output
 
 
 def plot_coverage(
     df: pl.DataFrame,
-    axs: Any | None,
-    output: str | None,
-    group_n: int,
     contig_name: str,
     rm_output: pl.DataFrame | None,
-):
-    ylim = int(df["first"].max() * 1.05)
+) -> tuple[plt.Figure, Any]:
+    ylim = 100
 
     # get the correct axis
-    if axs:
-        ax = axs[group_n]
-    else:
-        fig, ax = plt.subplots(figsize=(PLOT_WIDTH, PLOT_REGION_HEIGHT))
+    fig, ax = plt.subplots(figsize=(PLOT_WIDTH, PLOT_REGION_HEIGHT))
 
     if rm_output:
         rmax = ax
@@ -269,7 +270,7 @@ def plot_coverage(
     ax.yaxis.set_ticks_position("left")
     ax.xaxis.set_ticks_position("bottom")
 
-    sys.stderr.write(f"Added contig, {title}, to plot.\n")
+    return fig, ax
 
 
 def peak_finder(
@@ -358,7 +359,9 @@ def classify_misassemblies(
     # Classify gaps.
     df_gaps = df.filter(pl.col("first") == 0)
     misassemblies[Misassembly.GAP] = set(
-        pt.open(grp[0], grp[-1]) for grp in consecutive(df_gaps["position"], stepsize=1)
+        pt.open(grp[0], grp[-1])
+        for grp in consecutive(df_gaps["position"], stepsize=1)
+        if len(grp) > 1
     )
 
     # Classify misjoins.
@@ -401,55 +404,76 @@ def classify_misassemblies(
             )
 
     # TODO: false dupes
-    return df
+    return df, misassemblies
+
+
+def classify_plot_assembly(
+    infile: str,
+    output_dir: str,
+    threads: int,
+    contig: str,
+    start: int,
+    end: int,
+    rm_output: pl.DataFrame,
+) -> pl.DataFrame:
+    bam = pysam.AlignmentFile(infile, threads=threads)
+    contig_name = f"{contig}:{start}-{end}"
+
+    sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
+
+    df_group_labeled, miassemblies = classify_misassemblies(
+        np.flip(
+            np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
+        ).transpose(),
+        np.arange(start, end),
+    )
+    _ = plot_coverage(df_group_labeled, contig, rm_output)
+
+    sys.stderr.write(f"Plotted {contig_name}.\n")
+
+    output_plot = os.path.join(output_dir, f"{contig_name}.png")
+    plt.tight_layout()
+    plt.savefig(output_plot, dpi=PLOT_DPI)
+
+    df_misassemblies = pl.DataFrame(
+        [
+            (contig_name, interval.lower, interval.upper, misasm)
+            for misasm, intervals in miassemblies.items()
+            for interval in intervals
+        ],
+        schema=["contig", "start", "stop", "misassembly"],
+    )
+    return df_misassemblies
 
 
 def main():
     args = parse_args()
-    bam = pysam.AlignmentFile(args.infile, threads=args.threads)
-    regions = list(read_regions(bam, args))
+    os.makedirs(args.output_dir, exist_ok=True)
 
-    # SET up the plot based on the number of regions
-    num_regions = len(regions)
-    height = num_regions * PLOT_REGION_HEIGHT
+    # Read regions and close file handle to bam.
+    bam = pysam.AlignmentFile(args.input_bam, threads=args.threads)
+    regions = list(read_regions(bam, args))
+    bam.close()
 
     # set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
-    # TODO: Change so plot fn returns figure and generate subplot at end.
-    # make axes
-    fig, axs = None, None
-    output_dir = args.output if os.path.isdir(args.output) else None
-    if not output_dir:
-        fig, axs = plt.subplots(
-            nrows=num_regions, ncols=1, figsize=(PLOT_WIDTH, height)
-        )
-        if num_regions == 1:
-            axs = [axs]
-        figsize = fig.get_size_inches() * PLOT_DPI
+    # Read repeatmasker. UNTESTED.
+    rm_output = read_repeatmasker(args.input_repeatmasker)
 
-        if (figsize > (2**16)).any():
-            raise ValueError("Too many regions provided. Reduce the number of regions.")
-
-    rm_output = read_repeatmasker(args)
-
-    for group_n, (contig, start, end) in enumerate(regions):
-        sys.stderr.write(
-            "Reading in NucFreq from region: {}:{}-{}\n".format(contig, start, end)
+    with mp.Pool(processes=args.processes) as pool:
+        results = pool.starmap(
+            classify_plot_assembly,
+            [
+                (args.input_bam, args.output_dir, args.threads, *region, rm_output)
+                for region in regions
+            ],
         )
 
-        df_group_labeled = classify_misassemblies(
-            np.flip(
-                np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
-            ).transpose(),
-            np.arange(start, end),
-        )
-
-        plot_coverage(df_group_labeled, axs, output_dir, group_n, contig, rm_output)
-
-    if not output_dir:
-        plt.tight_layout()
-        plt.savefig(args.output, dpi=PLOT_DPI)
+    # Save misassemblies to output bed
+    if args.output_bed:
+        all_misasm = pl.concat(results).sort(by=["contig", "start"])
+        all_misasm.write_csv(file=args.output_bed, include_header=False, separator="\t")
 
 
 if __name__ == "__main__":
