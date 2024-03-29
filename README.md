@@ -1,4 +1,6 @@
 # NucFreq Misassembly Classifier
+[![CI](https://github.com/logsdon-lab/NucFreq/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFreq/actions/workflows/main.yml)
+
 Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nucleotide frequency plots and marking misassemblies.
 
 ![Labeled Misassemblies](docs/imgs/misassemblies.png)
@@ -35,6 +37,7 @@ options:
 ## Build
 To build from source.
 ```bash
+git clone git@github.com:logsdon-lab/NucFreq.git && cd NucFreq
 make venv && make build && make install
 ```
 
@@ -47,12 +50,23 @@ Test BAM filtered from merged alignment of:
 
 To run tests:
 ```bash
+source venv/bin/activate
 make test
 ```
 
-Or try the test example.
+Or try the test example directly.
 ```bash
-nucfreq -i test/HG00096_hifi_test.bam -b test/test/bed
+nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed
+```
+```
+haplotype2-0000133:3021508-8691473      3314093 3324276 collapse_var
+haplotype2-0000133:3021508-8691473      4126277 4142368 misjoin
+haplotype2-0000133:3021508-8691473      4566798 4683011 gap
+haplotype2-0000133:3021508-8691473      5466129 5496995 collapse
+haplotype2-0000133:3021508-8691473      5737835 5747246 collapse_var
+haplotype2-0000133:3021508-8691473      6067838 6072601 misjoin
+haplotype2-0000133:3021508-8691473      6607947 6639102 collapse_var
+haplotype2-0000133:3021508-8691473      7997560 8069465 misjoin
 ```
 
 ## Cite
