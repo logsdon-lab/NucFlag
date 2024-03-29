@@ -36,7 +36,7 @@ group_distance = 30_000
 thr_min_group_size = 5
 
 # Min group len from starting position to ending position.
-thr_min_group_len = 100
+thr_min_group_len = 500
 
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
 thr_collapse_het_ratio = 0.1

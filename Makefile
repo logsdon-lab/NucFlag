@@ -4,6 +4,7 @@ BIN=venv/bin/
 PROJECT_NAME=nucfreq
 
 test:
+	$(BIN)python3 -m pip install pytest
 	$(BIN)python3 -m pytest -vv
 
 build:
@@ -21,7 +22,7 @@ venv:
 	python3 -m virtualenv venv
 
 clean:
-	rm -rf dist/ venv/ .*cache/ .*egg.info/
+	rm -rf dist/ venv/ .*cache/ *.egg-info/
 
 upload:
 	$(BIN)python3 -m pip install --upgrade twine

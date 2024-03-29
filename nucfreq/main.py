@@ -41,11 +41,11 @@ DEF_CONFIG = {
         thr_valley_height_std_below=3,
     ),
     "second": dict(
-        thr_min_perc_first=0.07,
+        thr_min_perc_first=0.1,
         thr_peak_height_std_above=3,
         group_distance=30_000,
         thr_min_group_size=5,
-        thr_min_group_len=100,
+        thr_min_group_len=500,
         thr_collapse_het_ratio=0.1,
     ),
 }
@@ -150,7 +150,7 @@ def read_regions(
                 yield (chrm, int(start), int(end))
 
         if args.input_bed is not None:
-            sys.stderr.write(f"Reading in region(s) from {args.input_bed}.\n")
+            sys.stderr.write(f"Reading in regions from {args.input_bed}.\n")
 
             for line in open(args.input_bed):
                 if line[0] == "#":
@@ -479,7 +479,7 @@ def main():
     sys.stderr.write(f"Reading in BAM file: {args.input_bam}\n")
 
     regions = list(read_regions(bam, args))
-    sys.stderr.write(f"Loaded {len(regions)} regions.\n")
+    sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
 
     bam.close()
 
