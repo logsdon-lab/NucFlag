@@ -79,7 +79,9 @@ def parse_args() -> argparse.Namespace:
         description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-i", "--input_bam", help="Input bam file. Must be indexed.")
+    parser.add_argument(
+        "-i", "--input_bam", required=True, help="Input bam file. Must be indexed."
+    )
     parser.add_argument(
         "-b", "--input_bed", default=None, help="Bed file with regions to plot."
     )

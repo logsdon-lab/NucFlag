@@ -12,7 +12,7 @@ pip install git+https://github.com/logsdon-lab/NucFreq.git
 ```
 
 ```
-usage: NucPlot.py [-h] [-i INPUT_BAM] [-b INPUT_BED] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_BED] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES]
+usage: nucfreq [-h] -i INPUT_BAM [-b INPUT_BED] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_BED] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
 
 Use per-base read coverage to classify/plot misassemblies.
 
@@ -27,11 +27,16 @@ options:
   -o OUTPUT_BED, --output_bed OUTPUT_BED
                         Output bed file with misassembled regions. (default: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>)
   -r [REGIONS ...], --regions [REGIONS ...]
-                        Regions with the format: (.*):(\d+)-(\d+) (default: None)
+                        Regions with the format: (.+):(\d+)-(\d+) (default: None)
   -t THREADS, --threads THREADS
                         Threads for reading bam file. (default: 4)
   -p PROCESSES, --processes PROCESSES
                         Processes for classifying/plotting. (default: 4)
+  -c CONFIG, --config CONFIG
+                        Addtional threshold/params as toml file. (default: {'first': {'added_region_bounds': 0, 'thr_min_peak_horizontal_distance': 100000, 'thr_min_peak_width': 20,
+                        'thr_min_valley_horizontal_distance': 100000, 'thr_min_valley_width': 10, 'thr_peak_height_std_above': 4, 'thr_valley_height_std_below': 3}, 'second':
+                        {'thr_min_perc_first': 0.1, 'thr_peak_height_std_above': 3, 'group_distance': 30000, 'thr_min_group_size': 5, 'thr_min_group_len': 500,
+                        'thr_collapse_het_ratio': 0.1}})
 ```
 
 ### Configuration
