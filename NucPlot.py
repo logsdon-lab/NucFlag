@@ -76,10 +76,14 @@ def parse_args() -> argparse.Namespace:
         "-r", "--regions", nargs="*", help="Regions with the format: (.*):(\\d+)-(\\d+)"
     )
     parser.add_argument(
-        "-t", "--threads", default=4, help="Threads for reading bam file."
+        "-t", "--threads", default=4, type=int, help="Threads for reading bam file."
     )
     parser.add_argument(
-        "-p", "--processes", default=4, help="Processes for classifying/plotting."
+        "-p",
+        "--processes",
+        default=4,
+        type=int,
+        help="Processes for classifying/plotting.",
     )
 
     return parser.parse_args()
@@ -421,7 +425,9 @@ def main():
         )
 
     # Save misassemblies to output bed
-    all_misasm = pl.concat(results).sort(by=["contig", "start"])
+    all_misasm = pl.concat(result for result in results if not result.is_empty()).sort(
+        by=["contig", "start"]
+    )
     all_misasm.write_csv(file=args.output_bed, include_header=False, separator="\t")
 
 
