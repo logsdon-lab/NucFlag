@@ -34,6 +34,48 @@ options:
                         Processes for classifying/plotting. (default: 4)
 ```
 
+### Configuration
+Configuration can be provided in the form of a `toml` file.
+
+```bash
+nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
+```
+
+```toml
+[first]
+# Bases to add to region bounds
+added_region_bounds = 0
+# Min horizontal distance between peaks.
+thr_min_peak_horizontal_distance = 100_000
+# Min width of peak to consider.
+thr_min_peak_width = 20
+# Min horizontal distance between valleys.
+thr_min_valley_horizontal_distance = 100_000
+# Min width of valley to consider.
+thr_min_valley_width = 10
+# Number of std above mean to include peak.
+thr_peak_height_std_above = 3.5
+# Number of std below mean to include valley.
+thr_valley_height_std_below = 3
+
+[second]
+# Percent threshold of most freq base to allow second most freq base
+# 10 * 0.1 = 1 so above 1 is allowed.
+thr_min_perc_first = 0.07
+# Number of std above mean to include peak.
+thr_peak_height_std_above = 3
+# Group consecutive positions allowing a maximum gap of x.
+# Larger value groups more positions.
+group_distance = 25_000
+# Min group size.
+thr_min_group_size = 5
+# Min group len from starting position to ending position.
+thr_min_group_len = 20_000
+# Het ratio to consider second group a collapse if no overlaps in peaks found.
+thr_collapse_het_ratio = 0.1
+
+```
+
 ## Build
 To build from source.
 ```bash
@@ -77,3 +119,5 @@ haplotype2-0000133:3021508-8691473      7997560 8069465 misjoin
 ## TODO
 - Add false duplication detection.
 - Publish on pypi.
+- Refactor so cleaner.
+- Colormap for `Misassembly`

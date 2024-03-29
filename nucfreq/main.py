@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 import re
 import os
+import io
 import sys
 import pysam
+import pprint
+import tomllib
 import warnings
 import argparse
 import matplotlib
@@ -14,7 +17,7 @@ import polars as pl
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 
-from enum import StrEnum, auto
+from enum import StrEnum
 from typing import Generator, Any
 
 matplotlib.use("agg")
@@ -25,14 +28,35 @@ PLOT_HEIGHT = 6
 PLOT_WIDTH = 16
 PLOT_DPI = 600
 PLOT_YLIM = 100
+RGX_REGION = re.compile(r"(.+):(\d+)-(\d+)")
+
+DEF_CONFIG = {
+    "first": dict(
+        added_region_bounds=0,
+        thr_min_peak_horizontal_distance=100_000,
+        thr_min_peak_width=20,
+        thr_min_valley_horizontal_distance=100_000,
+        thr_min_valley_width=10,
+        thr_peak_height_std_above=4,
+        thr_valley_height_std_below=3,
+    ),
+    "second": dict(
+        thr_min_perc_first=0.07,
+        thr_peak_height_std_above=3,
+        group_distance=30_000,
+        thr_min_group_size=5,
+        thr_min_group_len=100,
+        thr_collapse_het_ratio=0.1,
+    ),
+}
 
 
 class Misassembly(StrEnum):
-    COLLAPSE_VAR = auto()
-    COLLAPSE = auto()
-    MISJOIN = auto()
-    GAP = auto()
-    FALSE_DUP = auto()
+    COLLAPSE_VAR = "COLLAPSE_VAR"
+    COLLAPSE = "COLLAPSE"
+    MISJOIN = "MISJOIN"
+    GAP = "GAP"
+    FALSE_DUP = "FALSE_DUP"
 
     def as_color(self) -> str:
         match self:
@@ -73,7 +97,10 @@ def parse_args() -> argparse.Namespace:
         help="Output bed file with misassembled regions.",
     )
     parser.add_argument(
-        "-r", "--regions", nargs="*", help="Regions with the format: (.*):(\\d+)-(\\d+)"
+        "-r",
+        "--regions",
+        nargs="*",
+        help=f"Regions with the format: {RGX_REGION.pattern}",
     )
     parser.add_argument(
         "-t", "--threads", default=4, type=int, help="Threads for reading bam file."
@@ -84,6 +111,13 @@ def parse_args() -> argparse.Namespace:
         default=4,
         type=int,
         help="Processes for classifying/plotting.",
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        default=DEF_CONFIG,
+        type=argparse.FileType("rb"),
+        help="Addtional threshold/params as toml file.",
     )
 
     return parser.parse_args()
@@ -109,7 +143,7 @@ def read_regions(
             sys.stderr.write(f"Reading in {len(args.regions)} region(s).\n")
 
             for region in args.regions:
-                match = re.match(r"(.+):(\d+)-(\d+)", region)
+                match = re.match(RGX_REGION, region)
                 assert match, region + " not valid!"
                 chrm, start, end = match.groups()
                 refs[chrm] = [int(start), int(end)]
@@ -234,8 +268,8 @@ def peak_finder(
     *,
     height: int,
     added_region_bounds: int,
-    distance: int = 100_000,
-    width: int = 20,
+    distance: int,
+    width: int,
 ) -> list[pt.Interval]:
     _, peak_info = scipy.signal.find_peaks(
         data, height=height, distance=distance, width=width
@@ -258,7 +292,7 @@ def classify_misassemblies(
     cov_first_second: np.ndarray,
     positions: np.ndarray,
     *,
-    added_region_bounds: int = 0,
+    config: dict[str, Any],
 ) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
     df = pl.DataFrame(
         {
@@ -270,34 +304,54 @@ def classify_misassemblies(
     del cov_first_second
 
     # Calculate std and mean for both most and second most freq read.
-    mean_first, stdev_first = df["first"].mean(), df["first"].std()
-    mean_second, stdev_second = df["second"].mean(), df["second"].std()
+    # Remove gaps which would artificially lower mean.
+    df_gapless = df.filter(pl.col("first") != 0)
+    mean_first, stdev_first = df_gapless["first"].mean(), df_gapless["first"].std()
+    mean_second, stdev_second = df_gapless["second"].mean(), df_gapless["second"].std()
+    del df_gapless
 
     first_peak_coords = peak_finder(
         df["first"],
         positions,
-        height=mean_first * 2,
-        added_region_bounds=added_region_bounds,
+        height=mean_first
+        + (config["first"]["thr_peak_height_std_above"] * stdev_first),
+        added_region_bounds=config["first"]["added_region_bounds"],
+        distance=config["first"]["thr_min_peak_horizontal_distance"],
+        width=config["first"]["thr_min_peak_width"],
     )
     first_valley_coords = peak_finder(
         -df["first"],
         positions,
-        height=-(mean_first - (3 * stdev_first)),
-        added_region_bounds=added_region_bounds,
+        height=-(
+            mean_first - (config["first"]["thr_valley_height_std_below"] * stdev_first)
+        ),
+        added_region_bounds=config["first"]["added_region_bounds"],
+        distance=config["first"]["thr_min_valley_horizontal_distance"],
+        width=config["first"]["thr_min_valley_width"],
     )
 
     # Remove secondary rows that don't meet minimal secondary coverage.
-    second_thr = max(round(mean_first * 0.1), round(mean_second + (3 * stdev_second)))
+    second_thr = max(
+        round(mean_first * config["second"]["thr_min_perc_first"]),
+        round(
+            mean_second + (config["second"]["thr_peak_height_std_above"] * stdev_second)
+        ),
+    )
 
     classified_second_outliers = set()
     df_second_outliers = df.filter(pl.col("second") > second_thr)
     # Group consecutive positions allowing a maximum gap of stepsize.
     # Larger stepsize groups more positions.
-    second_outliers_coords = [
-        pt.open(grp[0], grp[-1])
-        for grp in consecutive(df_second_outliers["position"], stepsize=25_000)
-        if len(grp) > 5
-    ]
+    second_outliers_coords = []
+    for grp in consecutive(
+        df_second_outliers["position"], stepsize=config["second"]["group_distance"]
+    ):
+        if len(grp) < config["second"]["thr_min_group_size"]:
+            continue
+        coords = pt.open(grp[0], grp[-1])
+        coords_len = coords.upper - coords.lower
+        if coords_len > config["second"]["thr_min_group_len"]:
+            second_outliers_coords.append(coords)
 
     misassemblies: dict[Misassembly, set[pt.Interval]] = {m: set() for m in Misassembly}
 
@@ -340,9 +394,12 @@ def classify_misassemblies(
             het_ratio=pl.col("second") / (pl.col("first") + pl.col("second"))
         )
         # Use het ratio to classfiy.
-        if df_second_outlier_het_ratio["het_ratio"][0] > 0.1:
+        if (
+            df_second_outlier_het_ratio["het_ratio"][0]
+            > config["second"]["thr_collapse_het_ratio"]
+        ):
             misassemblies[Misassembly.COLLAPSE_VAR].add(second_outlier)
-        elif df_second_outlier_het_ratio["het_ratio"][0] < 0.4:
+        else:
             misassemblies[Misassembly.MISJOIN].add(second_outlier)
 
     # Annotate df with misassembliy.
@@ -369,6 +426,7 @@ def classify_plot_assembly(
     contig: str,
     start: int,
     end: int,
+    config: dict[str, Any],
 ) -> pl.DataFrame:
     bam = pysam.AlignmentFile(infile, threads=threads)
     contig_name = f"{contig}:{start}-{end}"
@@ -380,6 +438,7 @@ def classify_plot_assembly(
             np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
         ).transpose(),
         np.arange(start, end),
+        config=config,
     )
 
     if output_dir:
@@ -407,19 +466,31 @@ def main():
     if args.output_plot_dir:
         os.makedirs(args.output_plot_dir, exist_ok=True)
 
+    if isinstance(args.config, io.IOBase):
+        # Fill missing config. Keep user config.
+        config = DEF_CONFIG | tomllib.load(args.config)
+    else:
+        config = args.config
+
+    sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
+
     # Read regions and close file handle to bam.
     bam = pysam.AlignmentFile(args.input_bam, threads=args.threads)
+    sys.stderr.write(f"Reading in BAM file: {args.input_bam}\n")
+
     regions = list(read_regions(bam, args))
+    sys.stderr.write(f"Loaded {len(regions)} regions.\n")
+
     bam.close()
 
-    # set text size
+    # Set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
     with mp.Pool(processes=args.processes) as pool:
         results = pool.starmap(
             classify_plot_assembly,
             [
-                (args.input_bam, args.output_plot_dir, args.threads, *region)
+                (args.input_bam, args.output_plot_dir, args.threads, *region, config)
                 for region in regions
             ],
         )
