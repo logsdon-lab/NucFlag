@@ -2,6 +2,20 @@
 requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools-git-versioning]
+enabled = true
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
+
+[tool.setuptools.packages.find]
+include = ["nucfreq*"]
+exclude = ["docs*", "test*"]
+
 [project]
 name = "nucfreq"
 authors = [
@@ -12,18 +26,7 @@ description = "Nucfreq misassembly identifier."
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT License"}
-dynamic = ["version"]
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
-
-[tool.setuptools]
-include-package-data = true
-
-[tool.setuptools.packages.find]
-include = ["nucfreq*"]
-exclude = ["docs*", "test*"]
+dynamic = ["version", "dependencies"]
 
 [project.scripts]
 nucfreq = "nucfreq.main:main"
