@@ -16,6 +16,7 @@ jobs:
 
     - name: Install dependencies.
       run: |
+        pip install virtualenv
         make venv && make build && make install
         venv/bin/python -m pip install pytest
 
