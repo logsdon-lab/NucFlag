@@ -14,7 +14,7 @@ import subprocess
 )
 def test_identify_misassemblies(bam: str, bed: str, expected: str):
     process = subprocess.run(
-        ["python", "NucPlot.py", "-i", bam, "-b", bed],
+        ["nucfreq", "-i", bam, "-b", bed],
         capture_output=True,
         check=True,
     )

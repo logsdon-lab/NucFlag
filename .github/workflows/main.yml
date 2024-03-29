@@ -1,0 +1,24 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout directory.
+      uses: actions/checkout@v3
+
+    - name: Set up Python.
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies.
+      run: |
+        make venv && make build && make install
+        venv/bin/python -m pip install pytest
+
+    - name: Run tests.
+      run: |
+        make test

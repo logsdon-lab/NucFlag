@@ -3,7 +3,12 @@ Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nuc
 
 ![Labeled Misassemblies](docs/imgs/misassemblies.png)
 
-# Usage
+## Usage
+Install from GitHub.
+```bash
+pip install git+https://github.com/logsdon-lab/NucFreq.git
+```
+
 ```
 usage: NucPlot.py [-h] [-i INPUT_BAM] [-b INPUT_BED] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_BED] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES]
 
@@ -27,13 +32,28 @@ options:
                         Processes for classifying/plotting. (default: 4)
 ```
 
-# Test
+## Build
+To build from source.
+```bash
+make venv && make build && make install
+```
+
+## Test
 Test BAM filtered from merged alignment of:
 * PacBio HiFi reads from HGSVC sample `HG00096`.
   * https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/HGSVC3/working/20220831_JAX_HiFi/HG00096/
 * Verkko v1.4.1 combined assembly for HGSVC sample `HG00096`
   * https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/HGSVC3/working/20240201_verkko_batch3/assemblies/HG00096/
 
+To run tests:
+```bash
+make test
+```
+
+Or try the test example.
+```bash
+nucfreq -i test/HG00096_hifi_test.bam -b test/test/bed
+```
 
 ## Cite
 - **Vollger MR**, Dishuck PC, Sorensen M, Welch AE, Dang V, Dougherty ML, et al. Long-read sequence and assembly of segmental duplications. Nat Methods. 2019;16: 88–94. doi:10.1038/s41592-018-0236-3
