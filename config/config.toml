@@ -15,7 +15,7 @@ thr_min_valley_horizontal_distance = 100_000
 thr_min_valley_width = 10
 
 # Number of std above mean to include peak.
-thr_peak_height_std_above = 4
+thr_peak_height_std_above = 3.5
 
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
@@ -34,9 +34,6 @@ group_distance = 30_000
 
 # Min group size.
 thr_min_group_size = 5
-
-# Min group len from starting position to ending position.
-thr_min_group_len = 500
 
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
 thr_collapse_het_ratio = 0.1

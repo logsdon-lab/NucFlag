@@ -38,11 +38,11 @@ DEF_CONFIG = {
         thr_min_peak_width=20,
         thr_min_valley_horizontal_distance=100_000,
         thr_min_valley_width=10,
-        thr_peak_height_std_above=4,
+        thr_peak_height_std_above=3.5,
         thr_valley_height_std_below=3,
     ),
     "second": dict(
-        thr_min_perc_first=0.15,
+        thr_min_perc_first=0.1,
         thr_peak_height_std_above=3,
         group_distance=30_000,
         thr_min_group_size=5,
@@ -171,7 +171,7 @@ def parse_args() -> argparse.Namespace:
         "--ignore_regions",
         default=None,
         type=argparse.FileType("rt"),
-        help="Bed file with regions to ignore. With format: contig|all\tstart\tend\absolute|relative",
+        help="Bed file with regions to ignore. With format: contig|all\tstart\tend\tabsolute|relative",
     )
     return parser.parse_args()
 

@@ -13,6 +13,7 @@ pip install git+https://github.com/logsdon-lab/NucFreq.git
 
 ```
 usage: nucfreq [-h] -i INPUT_BAM [-b INPUT_BED] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_BED] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
+               [--ignore_regions IGNORE_REGIONS]
 
 Use per-base read coverage to classify/plot misassemblies.
 
@@ -21,7 +22,7 @@ options:
   -i INPUT_BAM, --input_bam INPUT_BAM
                         Input bam file. Must be indexed. (default: None)
   -b INPUT_BED, --input_bed INPUT_BED
-                        Bed file with regions to plot. (default: None)
+                        Bed file with regions to check. (default: None)
   -d OUTPUT_PLOT_DIR, --output_plot_dir OUTPUT_PLOT_DIR
                         Output plot dir. (default: None)
   -o OUTPUT_BED, --output_bed OUTPUT_BED
@@ -33,10 +34,12 @@ options:
   -p PROCESSES, --processes PROCESSES
                         Processes for classifying/plotting. (default: 4)
   -c CONFIG, --config CONFIG
-                        Addtional threshold/params as toml file. (default: {'first': {'added_region_bounds': 0, 'thr_min_peak_horizontal_distance': 100000, 'thr_min_peak_width': 20,
-                        'thr_min_valley_horizontal_distance': 100000, 'thr_min_valley_width': 10, 'thr_peak_height_std_above': 4, 'thr_valley_height_std_below': 3}, 'second':
-                        {'thr_min_perc_first': 0.1, 'thr_peak_height_std_above': 3, 'group_distance': 30000, 'thr_min_group_size': 5, 'thr_min_group_len': 500,
-                        'thr_collapse_het_ratio': 0.1}})
+                        Additional threshold/params as toml file. (default: {'first': {'added_region_bounds': 0, 'thr_min_peak_horizontal_distance': 100000,
+                        'thr_min_peak_width': 20, 'thr_min_valley_horizontal_distance': 100000, 'thr_min_valley_width': 10, 'thr_peak_height_std_above': 3.5,
+                        'thr_valley_height_std_below': 3}, 'second': {'thr_min_perc_first': 0.1, 'thr_peak_height_std_above': 3, 'group_distance': 30000,
+                        'thr_min_group_size': 5, 'thr_collapse_het_ratio': 0.1}})
+  --ignore_regions IGNORE_REGIONS
+                        Bed file with regions to ignore. With format: contig|all start end absolute|relative (default: None)
 ```
 
 ### Configuration
@@ -59,23 +62,21 @@ thr_min_valley_horizontal_distance = 100_000
 # Min width of valley to consider.
 thr_min_valley_width = 10
 # Number of std above mean to include peak.
-thr_peak_height_std_above = 3.5
+thr_peak_height_std_above = 4
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
 
 [second]
 # Percent threshold of most freq base to allow second most freq base
 # 10 * 0.1 = 1 so above 1 is allowed.
-thr_min_perc_first = 0.07
+thr_min_perc_first = 0.1
 # Number of std above mean to include peak.
 thr_peak_height_std_above = 3
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.
-group_distance = 25_000
+group_distance = 30_000
 # Min group size.
 thr_min_group_size = 5
-# Min group len from starting position to ending position.
-thr_min_group_len = 20_000
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
 thr_collapse_het_ratio = 0.1
 
@@ -109,11 +110,20 @@ nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed
 haplotype2-0000133:3021508-8691473      3314093 3324276 COLLAPSE_VAR
 haplotype2-0000133:3021508-8691473      4126277 4142368 MISJOIN
 haplotype2-0000133:3021508-8691473      4566798 4683011 GAP
-haplotype2-0000133:3021508-8691473      5466129 5496995 COLLAPSE
 haplotype2-0000133:3021508-8691473      5737835 5747246 COLLAPSE_VAR
 haplotype2-0000133:3021508-8691473      6067838 6072601 MISJOIN
 haplotype2-0000133:3021508-8691473      6607947 6639102 COLLAPSE_VAR
 haplotype2-0000133:3021508-8691473      7997560 8069465 MISJOIN
+```
+
+Test workflow using `data/` dir.
+```bash
+snakemake \
+-s test/workflow/Snakefile \
+-j 12 \
+--executor cluster-generic \
+--cluster-generic-submit-cmd "bsub -q epistasis_normal -n {threads} -o /dev/null" \
+--use-conda -p
 ```
 
 ## Cite
