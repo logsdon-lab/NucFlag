@@ -28,7 +28,8 @@ rule nucplot:
         ignore_bed="config/ignore_regions.bed",
     output:
         plot_dir=directory(os.path.join("output", "{sm}")),
-        misassemblies=os.path.join("output", "{sm}_misassemblies.bed")
+        misassemblies=os.path.join("output", "{sm}_misassemblies.bed"),
+        status=os.path.join("output", "{sm}_status.bed")
     threads:
         12
     conda:
@@ -47,6 +48,7 @@ rule nucplot:
         -p {threads} \
         -t {threads} \
         -c {input.config} \
+        -s {output.status} \
         --ignore_regions {input.ignore_bed} 2> {log}
         """
 
