@@ -8,3 +8,5 @@ pre-commit
 pytest
 ruff
 mypy
+snakemake>=8.0
+snakemake-executor-plugin-cluster-generic

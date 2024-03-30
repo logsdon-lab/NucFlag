@@ -3,18 +3,19 @@ import subprocess
 
 
 @pytest.mark.parametrize(
-    ["bam", "bed", "expected"],
+    ["bam", "bed", "expected", "config"],
     [
         (
             "test/HG00096_hifi_test.bam",
             "test/test.bed",
             "test/expected.bed",
+            "test/config.toml",
         )
     ],
 )
-def test_identify_misassemblies(bam: str, bed: str, expected: str):
+def test_identify_misassemblies(bam: str, bed: str, expected: str, config: str):
     process = subprocess.run(
-        ["nucfreq", "-i", bam, "-b", bed],
+        ["nucfreq", "-i", bam, "-b", bed, "-c", config],
         capture_output=True,
         check=True,
     )

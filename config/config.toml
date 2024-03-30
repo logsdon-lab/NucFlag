@@ -1,21 +1,18 @@
 [first]
-# Bases to add to region bounds
-added_region_bounds = 0
-
 # Min horizontal distance between peaks.
-thr_min_peak_horizontal_distance = 100_000
+thr_min_peak_horizontal_distance = 10_000
 
 # Min width of peak to consider.
 thr_min_peak_width = 20
 
 # Min horizontal distance between valleys.
-thr_min_valley_horizontal_distance = 100_000
+thr_min_valley_horizontal_distance = 10_000
 
 # Min width of valley to consider.
 thr_min_valley_width = 10
 
 # Number of std above mean to include peak.
-thr_peak_height_std_above = 4
+thr_peak_height_std_above = 3.2
 
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
@@ -33,10 +30,7 @@ thr_peak_height_std_above = 3
 group_distance = 30_000
 
 # Min group size.
-thr_min_group_size = 5
-
-# Min group len from starting position to ending position.
-thr_min_group_len = 500
+thr_min_group_size = 10
 
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
-thr_collapse_het_ratio = 0.1
+thr_collapse_het_ratio = 0.2
