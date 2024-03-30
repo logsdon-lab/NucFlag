@@ -50,6 +50,11 @@ DEF_CONFIG = {
 }
 
 
+class RegionStatus(StrEnum):
+    MISASSEMBLED = auto()
+    GOOD = auto()
+
+
 class RegionMode(StrEnum):
     ABSOLUTE = auto()
     RELATIVE = auto()
@@ -117,7 +122,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-b",
-        "--input_bed",
+        "--input_regions",
         default=None,
         type=argparse.FileType("rt"),
         help="Bed file with regions to check.",
@@ -130,10 +135,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-o",
-        "--output_bed",
+        "--output_misasm",
         default=sys.stdout,
         type=argparse.FileType("wt"),
         help="Output bed file with misassembled regions.",
+    )
+    parser.add_argument(
+        "-s",
+        "--output_status",
+        default=None,
+        type=argparse.FileType("wt"),
+        help="Bed file with status of contigs. With format: contig\tstart\tend\tmisassembled|good",
     )
     parser.add_argument(
         "-r",
@@ -164,6 +176,7 @@ def parse_args() -> argparse.Namespace:
         type=argparse.FileType("rt"),
         help="Bed file with regions to ignore. With format: contig|all\tstart\tend\tabsolute|relative",
     )
+
     return parser.parse_args()
 
 
@@ -190,7 +203,7 @@ def read_bed_file(
 def read_regions(
     bam: pysam.AlignmentFile, args: argparse.Namespace
 ) -> Generator[tuple[str, int, int], None, None]:
-    if args.regions is not None or args.input_bed is not None:
+    if args.regions is not None or args.input_regions is not None:
         if args.regions is not None:
             sys.stderr.write(f"Reading in {len(args.regions)} region(s).\n")
 
@@ -200,12 +213,12 @@ def read_regions(
                 chrm, start, end = match.groups()
                 yield (chrm, int(start), int(end))
 
-        if args.input_bed is not None:
-            sys.stderr.write(f"Reading in regions from {args.input_bed.name}.\n")
+        if args.input_regions is not None:
+            sys.stderr.write(f"Reading in regions from {args.input_regions.name}.\n")
 
             yield from (
                 (ctg, start, stop)
-                for ctg, start, stop, *_ in read_bed_file(args.input_bed)
+                for ctg, start, stop, *_ in read_bed_file(args.input_regions)
             )
     else:
         refs = {}
@@ -623,10 +636,27 @@ def main():
         )
 
     # Save misassemblies to output bed
-    all_misasm = pl.concat(result for result in results if not result.is_empty()).sort(
-        by=["contig", "start"]
+    dfs_misasm = []
+    region_status = []
+    for region_info, df_misasm in zip(regions, results):
+        if not df_misasm.is_empty():
+            region_status.append((*region_info, RegionStatus.MISASSEMBLED))
+            dfs_misasm.append(df_misasm)
+        else:
+            region_status.append((*region_info, RegionStatus.GOOD))
+
+    df_all_misasm: pl.DataFrame = pl.concat(dfs_misasm)
+    df_all_misasm.sort(by=["contig", "start"]).write_csv(
+        file=args.output_misasm, include_header=False, separator="\t"
     )
-    all_misasm.write_csv(file=args.output_bed, include_header=False, separator="\t")
+
+    if args.output_status:
+        df_asm_status = pl.DataFrame(
+            region_status, schema=["contig", "start", "end", "status"]
+        )
+        df_asm_status.sort(by=["contig", "start"]).write_csv(
+            args.output_status, include_header=False, separator="\t"
+        )
 
 
 if __name__ == "__main__":
