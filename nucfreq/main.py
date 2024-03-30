@@ -33,20 +33,19 @@ RGX_REGION = re.compile(r"(.+):(\d+)-(\d+)")
 
 DEF_CONFIG = {
     "first": dict(
-        added_region_bounds=0,
-        thr_min_peak_horizontal_distance=100_000,
+        thr_min_peak_horizontal_distance=10_000,
         thr_min_peak_width=20,
-        thr_min_valley_horizontal_distance=100_000,
+        thr_min_valley_horizontal_distance=10_000,
         thr_min_valley_width=10,
-        thr_peak_height_std_above=3.5,
+        thr_peak_height_std_above=3.2,
         thr_valley_height_std_below=3,
     ),
     "second": dict(
-        thr_min_perc_first=0.1,
+        thr_min_perc_first=0.2,
         thr_peak_height_std_above=3,
         group_distance=30_000,
-        thr_min_group_size=5,
-        thr_collapse_het_ratio=0.1,
+        thr_min_group_size=10,
+        thr_collapse_het_ratio=0.2,
     ),
 }
 
@@ -68,14 +67,6 @@ class Region(NamedTuple):
             if not full:
                 raise ValueError("Missing full interval.")
 
-            # full : 350 750
-            # rel : 0 250 -> 350 600
-            # rel : 0 -250 -> x
-            # rel : -250 0 -> 500 750
-            # rel : -250 50 -> 500 750
-            # rel : -250 -50 -> 500 700
-            # rel : 250 0 -> x
-            # rel : 50 100 -> 400 750
             if self.region.lower > self.region.upper:
                 raise ValueError(
                     "Region lower bound cannot be larger than upper bound."
@@ -210,7 +201,7 @@ def read_regions(
                 yield (chrm, int(start), int(end))
 
         if args.input_bed is not None:
-            sys.stderr.write(f"Reading in regions from {args.input_bed}.\n")
+            sys.stderr.write(f"Reading in regions from {args.input_bed.name}.\n")
 
             yield from (
                 (ctg, start, stop)
@@ -340,7 +331,6 @@ def peak_finder(
     positions: np.ndarray,
     *,
     height: int,
-    added_region_bounds: int,
     distance: int,
     width: int,
 ) -> list[pt.Interval]:
@@ -349,8 +339,8 @@ def peak_finder(
     )
     return [
         pt.open(
-            positions[int(left_pos)] - added_region_bounds,
-            positions[int(right_pos)] + added_region_bounds,
+            positions[int(left_pos)],
+            positions[int(right_pos)],
         )
         for left_pos, right_pos in zip(peak_info["left_ips"], peak_info["right_ips"])
     ]
@@ -399,7 +389,6 @@ def classify_misassemblies(
         df["first"],
         positions,
         height=first_peak_height_thr,
-        added_region_bounds=config["first"]["added_region_bounds"],
         distance=config["first"]["thr_min_peak_horizontal_distance"],
         width=config["first"]["thr_min_peak_width"],
     )
@@ -407,7 +396,6 @@ def classify_misassemblies(
         -df["first"],
         positions,
         height=-first_valley_height_thr,
-        added_region_bounds=config["first"]["added_region_bounds"],
         distance=config["first"]["thr_min_valley_horizontal_distance"],
         width=config["first"]["thr_min_valley_width"],
     )
@@ -597,7 +585,7 @@ def main():
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
     # for region in regions:
-    #     if region[0] != "haplotype1-0000025":
+    #     if region[0] != "haplotype1-0000015":
     #         continue
 
     #     classify_plot_assembly(

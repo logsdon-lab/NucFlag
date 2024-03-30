@@ -51,8 +51,6 @@ nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
 
 ```toml
 [first]
-# Bases to add to region bounds
-added_region_bounds = 0
 # Min horizontal distance between peaks.
 thr_min_peak_horizontal_distance = 100_000
 # Min width of peak to consider.

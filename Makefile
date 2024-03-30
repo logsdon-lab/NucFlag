@@ -22,7 +22,7 @@ venv:
 	python3 -m virtualenv venv
 
 clean:
-	rm -rf dist/ venv/ .*cache/ *.egg-info/
+	rm -rf dist/ venv/ .*cache/ *.egg-info/ benchmarks/ logs/ output/ .snakemake/
 
 upload:
 	$(BIN)python3 -m pip install --upgrade twine
