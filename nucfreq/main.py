@@ -17,8 +17,9 @@ import polars as pl
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 
-from enum import StrEnum
-from typing import Generator, Any
+from enum import StrEnum, auto
+from collections import defaultdict
+from typing import Generator, Any, TextIO, NamedTuple, DefaultDict
 
 matplotlib.use("agg")
 warnings.filterwarnings("ignore")
@@ -41,14 +42,55 @@ DEF_CONFIG = {
         thr_valley_height_std_below=3,
     ),
     "second": dict(
-        thr_min_perc_first=0.1,
+        thr_min_perc_first=0.15,
         thr_peak_height_std_above=3,
         group_distance=30_000,
         thr_min_group_size=5,
-        thr_min_group_len=500,
         thr_collapse_het_ratio=0.1,
     ),
 }
+
+
+class RegionMode(StrEnum):
+    ABSOLUTE = auto()
+    RELATIVE = auto()
+
+
+class Region(NamedTuple):
+    name: str
+    region: pt.Interval
+    mode: RegionMode
+
+    def contains(self, other: pt.Interval, *, full: pt.Interval | None = None) -> bool:
+        if self.mode == RegionMode.ABSOLUTE:
+            region = self.region
+        else:
+            if not full:
+                raise ValueError("Missing full interval.")
+
+            # full : 350 750
+            # rel : 0 250 -> 350 600
+            # rel : 0 -250 -> x
+            # rel : -250 0 -> 500 750
+            # rel : -250 50 -> 500 750
+            # rel : -250 -50 -> 500 700
+            # rel : 250 0 -> x
+            # rel : 50 100 -> 400 750
+            if self.region.lower > self.region.upper:
+                raise ValueError(
+                    "Region lower bound cannot be larger than upper bound."
+                )
+            if self.region.lower < 0:
+                start = full.upper
+            else:
+                start = full.lower
+
+            lower = start + self.region.lower
+            upper = start + self.region.upper
+
+            region = pt.open(max(lower, 0), np.clip(upper, 0, full.upper))
+
+        return other in region
 
 
 class Misassembly(StrEnum):
@@ -83,7 +125,11 @@ def parse_args() -> argparse.Namespace:
         "-i", "--input_bam", required=True, help="Input bam file. Must be indexed."
     )
     parser.add_argument(
-        "-b", "--input_bed", default=None, help="Bed file with regions to plot."
+        "-b",
+        "--input_bed",
+        default=None,
+        type=argparse.FileType("rt"),
+        help="Bed file with regions to check.",
     )
     parser.add_argument(
         "-d",
@@ -119,9 +165,14 @@ def parse_args() -> argparse.Namespace:
         "--config",
         default=DEF_CONFIG,
         type=argparse.FileType("rb"),
-        help="Addtional threshold/params as toml file.",
+        help="Additional threshold/params as toml file.",
     )
-
+    parser.add_argument(
+        "--ignore_regions",
+        default=None,
+        type=argparse.FileType("rt"),
+        help="Bed file with regions to ignore. With format: contig|all\tstart\tend\absolute|relative",
+    )
     return parser.parse_args()
 
 
@@ -135,11 +186,19 @@ def get_coverage_by_base(
     return np.array(tuple(zip(*coverage)))
 
 
+def read_bed_file(
+    bed_file: TextIO,
+) -> Generator[tuple[str, int, int, list[str]], None, None]:
+    for line in bed_file.readlines():
+        if line[0] == "#":
+            continue
+        chrm, start, end, *other = line.strip().split()
+        yield (chrm, int(start), int(end), other)
+
+
 def read_regions(
     bam: pysam.AlignmentFile, args: argparse.Namespace
 ) -> Generator[tuple[str, int, int], None, None]:
-    refs = {}
-
     if args.regions is not None or args.input_bed is not None:
         if args.regions is not None:
             sys.stderr.write(f"Reading in {len(args.regions)} region(s).\n")
@@ -148,20 +207,18 @@ def read_regions(
                 match = re.match(RGX_REGION, region)
                 assert match, region + " not valid!"
                 chrm, start, end = match.groups()
-                refs[chrm] = [int(start), int(end)]
                 yield (chrm, int(start), int(end))
 
         if args.input_bed is not None:
             sys.stderr.write(f"Reading in regions from {args.input_bed}.\n")
 
-            for line in open(args.input_bed):
-                if line[0] == "#":
-                    continue
-                chrm, start, end, *_ = line.strip().split()
-                refs[chrm] = [int(start), int(end)]
-                yield (chrm, int(start), int(end))
-
+            yield from (
+                (ctg, start, stop)
+                for ctg, start, stop, *_ in read_bed_file(args.input_bed)
+            )
     else:
+        refs = {}
+
         sys.stderr.write(
             "Reading the whole bam because no region or bed argument was made.\n"
         )
@@ -179,6 +236,20 @@ def read_regions(
 
         for contig in refs:
             yield (contig, refs[contig][0], refs[contig][1])
+
+
+def read_ignored_regions(bed_file: TextIO) -> Generator[Region, None, None]:
+    for i, line in enumerate(read_bed_file(bed_file)):
+        ctg, start, end, other = line
+        try:
+            mode = RegionMode(other[0])
+        except IndexError:
+            sys.stderr.write(
+                f"Line {i} ({line}) in {bed_file.name} doesn't have a mode. Skipping."
+            )
+            continue
+
+        yield Region(name=ctg, region=pt.open(start, end), mode=mode)
 
 
 def plot_coverage(
@@ -290,11 +361,16 @@ def consecutive(data, stepsize: int = 1):
     return np.split(data, np.where((np.diff(data) <= stepsize) == False)[0] + 1)  # noqa: E712
 
 
+def filter_interval_expr(interval: pt.Interval, *, col: str = "position") -> pl.Expr:
+    return (pl.col(col) >= interval.lower) & (pl.col(col) <= interval.upper)
+
+
 def classify_misassemblies(
     cov_first_second: np.ndarray,
     positions: np.ndarray,
     *,
     config: dict[str, Any],
+    ignored_regions: list[Region] | None,
 ) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
     df = pl.DataFrame(
         {
@@ -312,11 +388,17 @@ def classify_misassemblies(
     mean_second, stdev_second = df_gapless["second"].mean(), df_gapless["second"].std()
     del df_gapless
 
+    first_peak_height_thr = mean_first + (
+        config["first"]["thr_peak_height_std_above"] * stdev_first
+    )
+    first_valley_height_thr = mean_first - (
+        config["first"]["thr_valley_height_std_below"] * stdev_first
+    )
+
     first_peak_coords = peak_finder(
         df["first"],
         positions,
-        height=mean_first
-        + (config["first"]["thr_peak_height_std_above"] * stdev_first),
+        height=first_peak_height_thr,
         added_region_bounds=config["first"]["added_region_bounds"],
         distance=config["first"]["thr_min_peak_horizontal_distance"],
         width=config["first"]["thr_min_peak_width"],
@@ -324,9 +406,7 @@ def classify_misassemblies(
     first_valley_coords = peak_finder(
         -df["first"],
         positions,
-        height=-(
-            mean_first - (config["first"]["thr_valley_height_std_below"] * stdev_first)
-        ),
+        height=-first_valley_height_thr,
         added_region_bounds=config["first"]["added_region_bounds"],
         distance=config["first"]["thr_min_valley_horizontal_distance"],
         width=config["first"]["thr_min_valley_width"],
@@ -350,10 +430,7 @@ def classify_misassemblies(
     ):
         if len(grp) < config["second"]["thr_min_group_size"]:
             continue
-        coords = pt.open(grp[0], grp[-1])
-        coords_len = coords.upper - coords.lower
-        if coords_len > config["second"]["thr_min_group_len"]:
-            second_outliers_coords.append(coords)
+        second_outliers_coords.append(pt.open(grp[0], grp[-1]))
 
     misassemblies: dict[Misassembly, set[pt.Interval]] = {m: set() for m in Misassembly}
 
@@ -365,7 +442,12 @@ def classify_misassemblies(
                 classified_second_outliers.add(second_outlier)
 
         if peak not in misassemblies[Misassembly.COLLAPSE_VAR]:
-            misassemblies[Misassembly.COLLAPSE].add(peak)
+            local_mean_collapse_first = (
+                df.filter(filter_interval_expr(peak)).mean().get_column("first")[0]
+            )
+            # If local mean of suspected collapsed region is greater than thr, is a collapse.
+            if local_mean_collapse_first > first_peak_height_thr:
+                misassemblies[Misassembly.COLLAPSE].add(peak)
 
     # Classify gaps.
     df_gaps = df.filter(pl.col("first") == 0)
@@ -388,9 +470,7 @@ def classify_misassemblies(
             continue
 
         df_second_outlier = df.filter(
-            (pl.col("position") >= second_outlier.lower)
-            & (pl.col("position") <= second_outlier.upper)
-            & (pl.col("second") != 0)
+            filter_interval_expr(second_outlier) & (pl.col("second") != 0)
         )
         df_second_outlier_het_ratio = df_second_outlier.mean().with_columns(
             het_ratio=pl.col("second") / (pl.col("first") + pl.col("second"))
@@ -404,47 +484,62 @@ def classify_misassemblies(
         else:
             misassemblies[Misassembly.MISJOIN].add(second_outlier)
 
-    # Annotate df with misassembliy.
-    df = df.with_columns(status=pl.lit("Good"))
+    # Annotate df with misassembly.
+    lf = df.lazy().with_columns(status=pl.lit("Good"))
+
+    contig_region = pt.open(positions[0], positions[-1])
+    if not ignored_regions:
+        ignored_regions = []
+
+    filtered_misassemblies = defaultdict(set)
     for mtype, regions in misassemblies.items():
+        remove_regions = set()
         for region in regions:
-            df = df.with_columns(
-                status=pl.when(
-                    (pl.col("position") >= region.lower)
-                    & (pl.col("position") <= region.upper)
-                )
+            # Remove ignored regions.
+            if any(
+                ignored_region.contains(region, full=contig_region)
+                for ignored_region in ignored_regions
+            ):
+                remove_regions.add(region)
+                continue
+
+            lf = lf.with_columns(
+                status=pl.when(filter_interval_expr(region))
                 .then(pl.lit(mtype))
                 .otherwise(pl.col("status"))
             )
+        filtered_misassemblies[mtype] = regions - remove_regions
 
     # TODO: false dupes
-    return df, misassemblies
+    return lf.collect(), filtered_misassemblies
 
 
 def classify_plot_assembly(
-    infile: str,
+    input_bam: str,
     output_dir: str | None,
     threads: int,
     contig: str,
     start: int,
     end: int,
     config: dict[str, Any],
+    ignored_regions: list[Region] | None,
 ) -> pl.DataFrame:
-    bam = pysam.AlignmentFile(infile, threads=threads)
+    bam = pysam.AlignmentFile(input_bam, threads=threads)
     contig_name = f"{contig}:{start}-{end}"
 
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
 
-    df_group_labeled, miassemblies = classify_misassemblies(
+    df_group_labeled, misassemblies = classify_misassemblies(
         np.flip(
             np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
         ).transpose(),
         np.arange(start, end),
         config=config,
+        ignored_regions=ignored_regions,
     )
 
     if output_dir:
-        _ = plot_coverage(df_group_labeled, miassemblies, contig)
+        _ = plot_coverage(df_group_labeled, misassemblies, contig)
 
         sys.stderr.write(f"Plotted {contig_name}.\n")
 
@@ -455,7 +550,7 @@ def classify_plot_assembly(
     df_misassemblies = pl.DataFrame(
         [
             (contig_name, interval.lower, interval.upper, misasm)
-            for misasm, intervals in miassemblies.items()
+            for misasm, intervals in misassemblies.items()
             for interval in intervals
         ],
         schema=["contig", "start", "stop", "misassembly"],
@@ -476,23 +571,65 @@ def main():
 
     sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
 
-    # Read regions and close file handle to bam.
-    bam = pysam.AlignmentFile(args.input_bam, threads=args.threads)
+    # Read regions in bam.
     sys.stderr.write(f"Reading in BAM file: {args.input_bam}\n")
+    with pysam.AlignmentFile(args.input_bam, threads=args.threads) as bam:
+        regions = list(read_regions(bam, args))
 
-    regions = list(read_regions(bam, args))
     sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
 
-    bam.close()
+    # Load ignored regions.
+    ignored_regions: DefaultDict[str, list[Region]] = defaultdict(list)
+    if args.ignore_regions:
+        for region in read_ignored_regions(args.ignore_regions):
+            ignored_regions[region.name].append(region)
+
+        total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
+        total_ignored_regions = len(
+            regions if "all" in ignored_regions else ignored_regions
+        )
+
+        sys.stderr.write(
+            f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
+        )
 
     # Set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
+
+    # for region in regions:
+    #     if region[0] != "haplotype1-0000025":
+    #         continue
+
+    #     classify_plot_assembly(
+    #         args.input_bam,
+    #         args.output_plot_dir,
+    #         args.threads,
+    #         *region,
+    #         config,
+    #         (
+    #             ignored_regions["all"]
+    #             if "all" in ignored_regions
+    #             else ignored_regions.get(region[0])
+    #         ),
+    #     )
 
     with mp.Pool(processes=args.processes) as pool:
         results = pool.starmap(
             classify_plot_assembly,
             [
-                (args.input_bam, args.output_plot_dir, args.threads, *region, config)
+                (
+                    args.input_bam,
+                    args.output_plot_dir,
+                    args.threads,
+                    *region,
+                    config,
+                    # "all" takes precedence.
+                    (
+                        ignored_regions["all"]
+                        if "all" in ignored_regions
+                        else ignored_regions.get(region[0])
+                    ),
+                )
                 for region in regions
             ],
         )
