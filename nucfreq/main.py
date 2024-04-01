@@ -103,7 +103,7 @@ class Misassembly(StrEnum):
             case self.COLLAPSE:
                 return "green"
             case self.MISJOIN:
-                return "yellow"
+                return "orange"
             case self.GAP:
                 return "gray"
             case self.FALSE_DUP:
