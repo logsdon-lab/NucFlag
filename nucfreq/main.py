@@ -103,7 +103,7 @@ class Misassembly(StrEnum):
             case self.COLLAPSE:
                 return "green"
             case self.MISJOIN:
-                return "yellow"
+                return "orange"
             case self.GAP:
                 return "gray"
             case self.FALSE_DUP:
@@ -476,10 +476,11 @@ def classify_misassemblies(
         df_second_outlier_het_ratio = df_second_outlier.mean().with_columns(
             het_ratio=pl.col("second") / (pl.col("first") + pl.col("second"))
         )
-        # Use het ratio to classfiy.
+        # Use het ratio to classify.
+        # Low ratio consider collapse with var.
         if (
             df_second_outlier_het_ratio["het_ratio"][0]
-            > config["second"]["thr_collapse_het_ratio"]
+            < config["second"]["thr_collapse_het_ratio"]
         ):
             misassemblies[Misassembly.COLLAPSE_VAR].add(second_outlier)
         else:
@@ -598,9 +599,6 @@ def main():
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
     # for region in regions:
-    #     if region[0] != "haplotype1-0000015":
-    #         continue
-
     #     classify_plot_assembly(
     #         args.input_bam,
     #         args.output_plot_dir,
