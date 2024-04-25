@@ -53,17 +53,21 @@ nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
 ```toml
 [first]
 # Min horizontal distance between peaks.
-thr_min_peak_horizontal_distance = 100_000
+thr_min_peak_horizontal_distance = 1
 # Min width of peak to consider.
 thr_min_peak_width = 20
 # Min horizontal distance between valleys.
-thr_min_valley_horizontal_distance = 100_000
+thr_min_valley_horizontal_distance = 1
 # Min width of valley to consider.
 thr_min_valley_width = 10
 # Number of std above mean to include peak.
 thr_peak_height_std_above = 4
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
+# Group consecutive positions allowing a maximum gap of x.
+# Larger value groups more positions.
+valley_group_distance = 500
+peak_group_distance = 500
 
 [second]
 # Percent threshold of most freq base to allow second most freq base

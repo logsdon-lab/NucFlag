@@ -6,6 +6,8 @@ DEF_CONFIG = {
         thr_min_valley_width=10,
         thr_peak_height_std_above=3.2,
         thr_valley_height_std_below=3,
+        valley_group_distance=500,
+        peak_group_distance=500,
     ),
     "second": dict(
         thr_min_perc_first=0.2,

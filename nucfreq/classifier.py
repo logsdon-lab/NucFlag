@@ -25,17 +25,41 @@ def peak_finder(
     height: int,
     distance: int,
     width: int,
+    group_distance: int = 5_000,
 ) -> list[pt.Interval]:
     _, peak_info = scipy.signal.find_peaks(
         data, height=height, distance=distance, width=width
     )
-    return [
-        pt.open(
-            positions[int(left_pos)],
-            positions[int(right_pos)],
-        )
-        for left_pos, right_pos in zip(peak_info["left_ips"], peak_info["right_ips"])
-    ]
+
+    # Peaks are passed in sorted order.
+    intervals: list[pt.Interval] = []
+    for left_pos, right_pos in zip(peak_info["left_ips"], peak_info["right_ips"]):
+        new_peak = pt.closed(positions[int(left_pos)], positions[int(right_pos)])
+        try:
+            prev_peak = intervals.pop()
+            if prev_peak == new_peak:
+                intervals.append(new_peak)
+                continue
+
+            intersection = prev_peak.intersection(new_peak)
+            dst_between = new_peak.lower - prev_peak.upper
+
+            # Merge peaks if there are any intersections.
+            if not intersection.empty:
+                new_peak = prev_peak.union(new_peak)
+                intervals.append(new_peak)
+            # Merge peaks if within a set distance.
+            elif dst_between < group_distance:
+                new_peak = pt.closed(prev_peak.lower, new_peak.upper)
+                intervals.append(new_peak)
+            else:
+                intervals.append(prev_peak)
+                intervals.append(new_peak)
+        # First peak.
+        except IndexError:
+            intervals.append(new_peak)
+
+    return intervals
 
 
 # https://stackoverflow.com/a/7353335
@@ -83,6 +107,7 @@ def classify_misassemblies(
         height=first_peak_height_thr,
         distance=config["first"]["thr_min_peak_horizontal_distance"],
         width=config["first"]["thr_min_peak_width"],
+        group_distance=config["first"]["peak_group_distance"],
     )
     first_valley_coords = peak_finder(
         -df["first"],
@@ -90,6 +115,7 @@ def classify_misassemblies(
         height=-first_valley_height_thr,
         distance=config["first"]["thr_min_valley_horizontal_distance"],
         width=config["first"]["thr_min_valley_width"],
+        group_distance=config["first"]["valley_group_distance"],
     )
 
     # Remove secondary rows that don't meet minimal secondary coverage.
