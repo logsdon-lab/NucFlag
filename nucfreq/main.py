@@ -105,7 +105,7 @@ def main():
         # Fill missing config. Keep user config.
         config = DEF_CONFIG | tomllib.load(args.config)
     else:
-        config = args.config
+        config = DEF_CONFIG | args.config
 
     sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
 
