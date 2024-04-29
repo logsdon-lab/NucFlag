@@ -1,5 +1,5 @@
-# NucFreq Misassembly Classifier
-[![CI](https://github.com/logsdon-lab/NucFreq/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFreq/actions/workflows/main.yml)
+# `NucFlag`
+[![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
 
 Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nucleotide frequency plots and marking misassemblies.
 
@@ -8,11 +8,11 @@ Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nuc
 ## Usage
 Install from GitHub.
 ```bash
-pip install git+https://github.com/logsdon-lab/NucFreq.git
+pip install git+https://github.com/logsdon-lab/NucFlag.git
 ```
 
 ```
-usage: nucfreq [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
+usage: nucflag [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
                [--ignore_regions IGNORE_REGIONS]
 
 Use per-base read coverage to classify/plot misassemblies.
@@ -47,7 +47,7 @@ options:
 Configuration can be provided in the form of a `toml` file.
 
 ```bash
-nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
+nucflag -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
 ```
 
 ```toml
@@ -88,7 +88,7 @@ thr_collapse_het_ratio = 0.1
 ## Build
 To build from source.
 ```bash
-git clone git@github.com:logsdon-lab/NucFreq.git && cd NucFreq
+git clone git@github.com:logsdon-lab/NucFlag.git && cd NucFlag
 make venv && make build && make install
 ```
 
@@ -107,7 +107,7 @@ make test
 
 Or try the test example directly.
 ```bash
-nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c test/config.toml
+nucflag -i test/HG00096_hifi_test.bam -b test/test.bed -c test/config.toml
 ```
 ```
 haplotype2-0000133:3021508-8691473      3314093 3324276 MISJOIN

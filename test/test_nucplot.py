@@ -15,7 +15,7 @@ import subprocess
 )
 def test_identify_misassemblies(bam: str, bed: str, expected: str, config: str):
     process = subprocess.run(
-        ["nucfreq", "-i", bam, "-b", bed, "-c", config],
+        ["nucflag", "-i", bam, "-b", bed, "-c", config],
         capture_output=True,
         check=True,
     )
