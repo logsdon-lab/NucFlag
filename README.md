@@ -1,14 +1,14 @@
 # `NucFlag`
 [![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
+![PyPI - Version](https://img.shields.io/pypi/v/nucflag)
 
 Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nucleotide frequency plots and marking misassemblies.
 
 ![Labeled Misassemblies](docs/imgs/misassemblies.png)
 
 ## Usage
-Install from GitHub.
 ```bash
-pip install git+https://github.com/logsdon-lab/NucFlag.git
+pip install nucflag
 ```
 
 ```
@@ -139,6 +139,4 @@ snakemake \
 
 ## TODO
 - Add false duplication detection.
-- Publish on pypi.
-- Refactor so cleaner.
 - Colormap for `Misassembly`
