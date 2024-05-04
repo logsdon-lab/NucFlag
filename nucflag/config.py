@@ -16,4 +16,5 @@ DEF_CONFIG = {
         thr_min_group_size=10,
         thr_collapse_het_ratio=0.2,
     ),
+    "gaps": dict(thr_max_allowed_gap_size=1000),
 }

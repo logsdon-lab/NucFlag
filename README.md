@@ -83,6 +83,9 @@ thr_min_group_size = 5
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
 thr_collapse_het_ratio = 0.1
 
+[gaps]
+# Allow gaps up to this length.
+thr_max_allowed_gap_size = 1000
 ```
 
 ## Build

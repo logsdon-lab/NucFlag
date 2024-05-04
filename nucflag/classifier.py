@@ -157,11 +157,20 @@ def classify_misassemblies(
 
     # Classify gaps.
     df_gaps = df.filter(pl.col("first") == 0)
-    misassemblies[Misassembly.GAP] = set(
-        pt.open(grp[0], grp[-1])
-        for grp in consecutive(df_gaps["position"], stepsize=1)
-        if len(grp) > 1
-    )
+    gaps = set()
+    for grp in consecutive(df_gaps["position"], stepsize=1):
+        if len(grp) < 2:
+            continue
+
+        gap_len = grp[-1] - grp[0]
+
+        if gap_len < config["gaps"]["thr_max_allowed_gap_size"]:
+            continue
+
+        gap = pt.open(grp[0], grp[-1])
+        gaps.add(gap)
+
+    misassemblies[Misassembly.GAP] = gaps
 
     # Classify misjoins.
     for valley in first_valley_coords:
