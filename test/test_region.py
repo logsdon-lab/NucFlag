@@ -1,6 +1,6 @@
 import pytest
 import portion as pt
-from nucfreq.main import Region, RegionMode
+from nucflag.region import Region, RegionMode
 
 
 # full : 350 750

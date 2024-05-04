@@ -1,7 +1,7 @@
 .PHONY: build test venv clean dev install upload
 
 BIN=venv/bin/
-PROJECT_NAME=nucfreq
+PROJECT_NAME=nucflag
 
 test:
 	$(BIN)python3 -m pip install pytest

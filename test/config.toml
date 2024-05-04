@@ -17,6 +17,12 @@ thr_peak_height_std_above = 4
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
 
+# Group consecutive positions allowing a maximum gap of x.
+# Larger value groups more positions.
+valley_group_distance = 5000
+
+peak_group_distance = 5000
+
 [second]
 # Percent threshold of most freq base to allow second most freq base
 # 30 * 0.1 = 3 so above 3 is allowed.
@@ -34,3 +40,6 @@ thr_min_group_size = 5
 
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
 thr_collapse_het_ratio = 0.1
+
+[gaps]
+thr_max_allowed_gap_size = 1000

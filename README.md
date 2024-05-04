@@ -1,18 +1,18 @@
-# NucFreq Misassembly Classifier
-[![CI](https://github.com/logsdon-lab/NucFreq/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFreq/actions/workflows/main.yml)
+# `NucFlag`
+[![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/nucflag)](https://pypi.org/project/nucflag/)
 
 Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nucleotide frequency plots and marking misassemblies.
 
 ![Labeled Misassemblies](docs/imgs/misassemblies.png)
 
 ## Usage
-Install from GitHub.
 ```bash
-pip install git+https://github.com/logsdon-lab/NucFreq.git
+pip install nucflag
 ```
 
 ```
-usage: nucfreq [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
+usage: nucflag [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
                [--ignore_regions IGNORE_REGIONS]
 
 Use per-base read coverage to classify/plot misassemblies.
@@ -47,23 +47,27 @@ options:
 Configuration can be provided in the form of a `toml` file.
 
 ```bash
-nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
+nucflag -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
 ```
 
 ```toml
 [first]
 # Min horizontal distance between peaks.
-thr_min_peak_horizontal_distance = 100_000
+thr_min_peak_horizontal_distance = 1
 # Min width of peak to consider.
 thr_min_peak_width = 20
 # Min horizontal distance between valleys.
-thr_min_valley_horizontal_distance = 100_000
+thr_min_valley_horizontal_distance = 1
 # Min width of valley to consider.
 thr_min_valley_width = 10
 # Number of std above mean to include peak.
 thr_peak_height_std_above = 4
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
+# Group consecutive positions allowing a maximum gap of x.
+# Larger value groups more positions.
+valley_group_distance = 500
+peak_group_distance = 500
 
 [second]
 # Percent threshold of most freq base to allow second most freq base
@@ -79,12 +83,15 @@ thr_min_group_size = 5
 # Het ratio to consider second group a collapse if no overlaps in peaks found.
 thr_collapse_het_ratio = 0.1
 
+[gaps]
+# Allow gaps up to this length.
+thr_max_allowed_gap_size = 1000
 ```
 
 ## Build
 To build from source.
 ```bash
-git clone git@github.com:logsdon-lab/NucFreq.git && cd NucFreq
+git clone git@github.com:logsdon-lab/NucFlag.git && cd NucFlag
 make venv && make build && make install
 ```
 
@@ -103,7 +110,7 @@ make test
 
 Or try the test example directly.
 ```bash
-nucfreq -i test/HG00096_hifi_test.bam -b test/test.bed -c test/config.toml
+nucflag -i test/HG00096_hifi_test.bam -b test/test.bed -c test/config.toml
 ```
 ```
 haplotype2-0000133:3021508-8691473      3314093 3324276 MISJOIN
@@ -132,6 +139,4 @@ snakemake \
 
 ## TODO
 - Add false duplication detection.
-- Publish on pypi.
-- Refactor so cleaner.
 - Colormap for `Misassembly`

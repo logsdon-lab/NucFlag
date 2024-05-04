@@ -40,7 +40,7 @@ rule nucplot:
         "benchmarks/{sm}.tsv"
     shell:
         """
-        nucfreq \
+        nucflag \
         -i {input.bam} \
         -b {input.bed} \
         -d {output.plot_dir} \
