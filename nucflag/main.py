@@ -179,7 +179,11 @@ def main():
         else:
             region_status.append((*region_info, RegionStatus.GOOD))
 
-    df_all_misasm: pl.DataFrame = pl.concat(dfs_misasm)
+    try:
+        df_all_misasm: pl.DataFrame = pl.concat(dfs_misasm)
+    except pl.exceptions.NoDataError:
+        df_all_misasm = pl.DataFrame(schema=["contig", "start", "end"])
+
     df_all_misasm.sort(by=["contig", "start"]).write_csv(
         file=args.output_misasm, include_header=False, separator="\t"
     )
