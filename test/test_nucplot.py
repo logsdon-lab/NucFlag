@@ -6,16 +6,22 @@ import subprocess
     ["bam", "bed", "expected", "config"],
     [
         (
-            "test/HG00096_hifi_test.bam",
-            "test/test.bed",
-            "test/expected.bed",
-            "test/config.toml",
+            "test/standard/HG00096_hifi.bam",
+            "test/standard/region.bed",
+            "test/standard/expected.bed",
+            tuple(["-c", "test/config.toml"]),
+        ),
+        (
+            "test/ignored/HG00731_hifi.bam",
+            "test/ignored/region.bed",
+            "test/ignored/expected.bed",
+            tuple(["-c", "test/config.toml", "--ignore_regions", "test/ignored/ignore.bed"]),
         )
     ],
 )
-def test_identify_misassemblies(bam: str, bed: str, expected: str, config: str):
+def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple[str]):
     process = subprocess.run(
-        ["nucflag", "-i", bam, "-b", bed, "-c", config],
+        ["python", "-m", "nucflag.main", "-i", bam, "-b", bed, *config],
         capture_output=True,
         check=True,
     )
