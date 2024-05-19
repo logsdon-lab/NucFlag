@@ -19,7 +19,7 @@ dev:
 	$(BIN)python3 -m pip install -r requirements-dev.txt
 
 venv:
-	python3 -m virtualenv venv
+	python3 -m venv venv
 
 clean:
 	rm -rf dist/ venv/ .*cache/ *.egg-info/ benchmarks/ logs/ output/ .snakemake/
