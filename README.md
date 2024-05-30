@@ -12,8 +12,7 @@ pip install nucflag
 ```
 
 ```
-usage: nucflag [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG]
-               [--ignore_regions IGNORE_REGIONS]
+usage: nucflag [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [--output_cov_dir OUTPUT_COV_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG] [--ignore_regions IGNORE_REGIONS]
 
 Use per-base read coverage to classify/plot misassemblies.
 
@@ -25,6 +24,8 @@ options:
                         Bed file with regions to check. (default: None)
   -d OUTPUT_PLOT_DIR, --output_plot_dir OUTPUT_PLOT_DIR
                         Output plot dir. (default: None)
+  --output_cov_dir OUTPUT_COV_DIR
+                        Output coverage dir. Generates coverage bed files per region. Gzipped by default. (default: None)
   -o OUTPUT_MISASM, --output_misasm OUTPUT_MISASM
                         Output bed file with misassembled regions. (default: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>)
   -s OUTPUT_STATUS, --output_status OUTPUT_STATUS
@@ -88,6 +89,9 @@ thr_collapse_het_ratio = 0.1
 thr_max_allowed_gap_size = 1000
 ```
 
+## Workflow
+For an end-to-end workflow, see [`Snakemake-NucFlag`](https://github.com/logsdon-lab/Snakemake-NucFlag).
+
 ## Build
 To build from source.
 ```bash
@@ -110,7 +114,7 @@ make test
 
 Or try the test example directly.
 ```bash
-nucflag -i test/HG00096_hifi_test.bam -b test/test.bed -c test/config.toml
+nucflag -i test/standard/HG00096_hifi.bam -b test/standard/region.bed -c test/config.toml
 ```
 ```
 haplotype2-0000133:3021508-8691473      3314093 3324276 MISJOIN
@@ -122,7 +126,10 @@ haplotype2-0000133:3021508-8691473      6607947 6639102 MISJOIN
 haplotype2-0000133:3021508-8691473      7997560 8069465 COLLAPSE_VAR
 ```
 
-Test workflow using `data/` dir.
+Test workflow using `data/` dir. Requires:
+1. `bam` files of alignment of HGSVC3 HiFi reads to full assembly.
+2. `bed` files of centromere + 500kbp regions.
+
 ```bash
 snakemake \
 -s test/workflow/Snakefile \
