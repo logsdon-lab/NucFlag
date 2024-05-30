@@ -50,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         help="Output plot dir.",
     )
     parser.add_argument(
+        "--output_cov_dir",
+        default=None,
+        help="Output coverage dir. Generates coverage bed files per region. Gzipped by default.",
+    )
+    parser.add_argument(
         "-o",
         "--output_misasm",
         default=sys.stdout,
@@ -100,6 +105,8 @@ def main():
     args = parse_args()
     if args.output_plot_dir:
         os.makedirs(args.output_plot_dir, exist_ok=True)
+    if args.output_cov_dir:
+        os.makedirs(args.output_cov_dir, exist_ok=True)
 
     if isinstance(args.config, io.IOBase):
         # Fill missing config. Keep user config.
@@ -138,6 +145,7 @@ def main():
     #     classify_plot_assembly(
     #         args.input_bam,
     #         args.output_plot_dir,
+    #         args.output_cov_dir,
     #         args.threads,
     #         *region,
     #         config,
@@ -155,6 +163,7 @@ def main():
                 (
                     args.input_bam,
                     args.output_plot_dir,
+                    args.output_cov_dir,
                     args.threads,
                     *region,
                     config,
