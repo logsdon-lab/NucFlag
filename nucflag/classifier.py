@@ -1,6 +1,8 @@
 import os
 import sys
+import gzip
 import pysam
+import shutil
 import scipy.signal
 
 import numpy as np
@@ -233,6 +235,7 @@ def classify_misassemblies(
 def classify_plot_assembly(
     input_bam: str,
     output_dir: str | None,
+    output_cov_dir: str | None,
     threads: int,
     contig: str,
     start: int,
@@ -257,11 +260,24 @@ def classify_plot_assembly(
     if output_dir:
         _ = plot_coverage(df_group_labeled, misassemblies, contig)
 
-        sys.stderr.write(f"Plotted {contig_name}.\n")
+        sys.stderr.write(f"Plotting {contig_name}.\n")
 
         output_plot = os.path.join(output_dir, f"{contig_name}.png")
         plt.tight_layout()
         plt.savefig(output_plot, dpi=PLOT_DPI)
+
+    if output_cov_dir:
+        sys.stderr.write(f"Writing coverage bed file for {contig_name}.\n")
+
+        output_bed = os.path.join(output_cov_dir, f"{contig_name}.bed")
+        df_group_labeled.write_csv(output_bed, separator="\t")
+
+        sys.stderr.write(f"Compressing coverage bed file for {contig_name}.\n")
+        with open(output_bed, "rb") as f_in:
+            with gzip.open(f"{output_bed}.gz", "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+
+        os.remove(output_bed)
 
     df_misassemblies = pl.DataFrame(
         [
