@@ -180,6 +180,15 @@ def classify_misassemblies(
             if second_outlier in valley:
                 misassemblies[Misassembly.MISJOIN].add(valley)
                 classified_second_outliers.add(second_outlier)
+        # Otherwise, check valley's local mean.
+        # This means that while no overlapping secondary reads, low coverage means likely elsewhere.
+        # Treat as a misjoin.
+        if valley not in misassemblies[Misassembly.MISJOIN]:
+            local_mean_misjoin_first = (
+                df.filter(filter_interval_expr(valley)).mean().get_column("first")[0]
+            )
+            if local_mean_misjoin_first > first_valley_height_thr:
+                misassemblies[Misassembly.MISJOIN].add(valley)
 
     # Check remaining secondary regions not categorized.
     for second_outlier in second_outliers_coords:
