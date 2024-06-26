@@ -187,7 +187,9 @@ def classify_misassemblies(
             local_mean_misjoin_first = (
                 df.filter(filter_interval_expr(valley)).mean().get_column("first")[0]
             )
-            if local_mean_misjoin_first > first_valley_height_thr:
+            if local_mean_misjoin_first < first_valley_height_thr and not any(
+                g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
+            ):
                 misassemblies[Misassembly.MISJOIN].add(valley)
 
     # Check remaining secondary regions not categorized.
