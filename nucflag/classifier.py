@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from .io import get_coverage_by_base
 from .plot import plot_coverage
-from .constants import PLOT_DPI
+from .constants import PLOT_DPI, THR_MISJOIN_VALLEY_HEIGHT_STD_BELOW
 from .misassembly import Misassembly
 from .region import Region
 
@@ -175,6 +175,9 @@ def classify_misassemblies(
     misassemblies[Misassembly.GAP] = gaps
 
     # Classify misjoins.
+    misjoin_height_thr = mean_first - (
+        THR_MISJOIN_VALLEY_HEIGHT_STD_BELOW * stdev_first
+    )
     for valley in first_valley_coords:
         for second_outlier in second_outliers_coords:
             if second_outlier in valley:
@@ -187,7 +190,7 @@ def classify_misassemblies(
             local_mean_misjoin_first = (
                 df.filter(filter_interval_expr(valley)).mean().get_column("first")[0]
             )
-            if local_mean_misjoin_first < first_valley_height_thr and not any(
+            if local_mean_misjoin_first < misjoin_height_thr and not any(
                 g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
             ):
                 misassemblies[Misassembly.MISJOIN].add(valley)
