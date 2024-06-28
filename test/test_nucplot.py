@@ -15,8 +15,21 @@ import subprocess
             "test/ignored/HG00731_hifi.bam",
             "test/ignored/region.bed",
             "test/ignored/expected.bed",
-            tuple(["-c", "test/config.toml", "--ignore_regions", "test/ignored/ignore.bed"]),
-        )
+            tuple(
+                [
+                    "-c",
+                    "test/config.toml",
+                    "--ignore_regions",
+                    "test/ignored/ignore.bed",
+                ]
+            ),
+        ),
+        (
+            "test/misjoin/HG00171_hifi.bam",
+            "test/misjoin/region.bed",
+            "test/misjoin/expected.bed",
+            tuple(["-c", "test/config.toml"]),
+        ),
     ],
 )
 def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple[str]):

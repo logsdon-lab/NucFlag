@@ -15,7 +15,7 @@ exclude = ["docs*", "test*"]
 
 [project]
 name = "nucflag"
-version = "0.0.6"
+version = "0.0.7"
 authors = [
     {name = "Keith Oshima", email = "oshimak@pennmedicine.upenn.edu"},
     {name = "Mitchell R. Vollger", email = "mrvollger@gmail.com"},

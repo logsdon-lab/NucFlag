@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from .io import get_coverage_by_base
 from .plot import plot_coverage
-from .constants import PLOT_DPI
+from .constants import PLOT_DPI, THR_MISJOIN_VALLEY_HEIGHT_PERC_BELOW
 from .misassembly import Misassembly
 from .region import Region
 
@@ -94,6 +94,10 @@ def classify_misassemblies(
     df_gapless = df.filter(pl.col("first") != 0)
     mean_first, stdev_first = df_gapless["first"].mean(), df_gapless["first"].std()
     mean_second, stdev_second = df_gapless["second"].mean(), df_gapless["second"].std()
+    # Calculate misjoin height threshold. Filters for values smaller than 99.9999% of values.
+    misjoin_height_thr = df_gapless["first"].quantile(
+        THR_MISJOIN_VALLEY_HEIGHT_PERC_BELOW
+    )
     del df_gapless
 
     first_peak_height_thr = mean_first + (
@@ -180,6 +184,17 @@ def classify_misassemblies(
             if second_outlier in valley:
                 misassemblies[Misassembly.MISJOIN].add(valley)
                 classified_second_outliers.add(second_outlier)
+        # Otherwise, check valley's local minimum.
+        # This means that while no overlapping secondary reads, low coverage means likely elsewhere.
+        # Treat as a misjoin.
+        if valley not in misassemblies[Misassembly.MISJOIN]:
+            local_min_misjoin_first = (
+                df.filter(filter_interval_expr(valley)).min().get_column("first")[0]
+            )
+            if local_min_misjoin_first < misjoin_height_thr and not any(
+                g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
+            ):
+                misassemblies[Misassembly.MISJOIN].add(valley)
 
     # Check remaining secondary regions not categorized.
     for second_outlier in second_outliers_coords:
