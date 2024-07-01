@@ -9,10 +9,10 @@ thr_min_peak_width = 20
 thr_min_valley_horizontal_distance = 1
 
 # Min width of valley to consider.
-thr_min_valley_width = 5
+thr_min_valley_width = 10
 
 # Number of std above mean to include peak.
-thr_peak_height_std_above = 3.2
+thr_peak_height_std_above = 4
 
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
@@ -23,9 +23,9 @@ thr_misjoin_valley_height_perc_below = 0.001
 
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.
-valley_group_distance = 5000
+valley_group_distance = 500
 
-peak_group_distance = 5000
+peak_group_distance = 500
 
 [second]
 # Percent threshold of most freq base to allow second most freq base

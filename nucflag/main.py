@@ -140,8 +140,9 @@ def main():
     # Set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
+    # results = []
     # for region in regions:
-    #     classify_plot_assembly(
+    #     results.append(classify_plot_assembly(
     #         args.input_bam,
     #         args.output_plot_dir,
     #         args.output_cov_dir,
@@ -153,7 +154,7 @@ def main():
     #             if "all" in ignored_regions
     #             else ignored_regions.get(region[0])
     #         ),
-    #     )
+    #     ))
 
     with mp.Pool(processes=args.processes) as pool:
         results = pool.starmap(
