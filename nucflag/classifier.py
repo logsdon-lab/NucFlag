@@ -160,9 +160,9 @@ def classify_misassemblies(
 
         if peak not in misassemblies[Misassembly.COLLAPSE_VAR]:
             local_mean_collapse_first = (
-                df.filter(filter_interval_expr(peak)).mean().get_column("first")[0]
+                df.filter(filter_interval_expr(peak)).median().get_column("first")[0]
             )
-            # If local mean of suspected collapsed region is greater than thr, is a collapse.
+            # If local median of suspected collapsed region is greater than thr, is a collapse.
             if local_mean_collapse_first > first_peak_height_thr:
                 misassemblies[Misassembly.COLLAPSE].add(peak)
 
@@ -189,18 +189,26 @@ def classify_misassemblies(
             if second_outlier in valley:
                 misassemblies[Misassembly.MISJOIN].add(valley)
                 classified_second_outliers.add(second_outlier)
-        # Otherwise, check valley points falling below threshold.
+
+        # Otherwise, check if valley's median falls below threshold.
         # This means that while no overlapping secondary reads, low coverage means likely elsewhere.
         # Treat as a misjoin.
         if valley not in misassemblies[Misassembly.MISJOIN]:
+            # Filter first to get general region.
             df_valley = df.filter(filter_interval_expr(valley)).filter(
-                pl.col("first") < misjoin_height_thr
+                pl.col("first") <= misjoin_height_thr
             )
-            if df_valley.shape[0] < config["first"]["thr_min_valley_width"]:
+            # Skip if fewer than 2 points found.
+            if df_valley.shape[0] < 2:
                 continue
 
+            # Get bounds of region and calculate median.
+            # Avoid flagging if intersects gap region.
             valley = pt.open(df_valley["position"].min(), df_valley["position"].max())
-            if not any(g.overlaps(valley) for g in misassemblies[Misassembly.GAP]):
+            df_valley = df.filter(filter_interval_expr(valley))
+            if df_valley["first"].median() <= misjoin_height_thr and not any(
+                g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
+            ):
                 misassemblies[Misassembly.MISJOIN].add(valley)
 
     # Check remaining secondary regions not categorized.
@@ -211,7 +219,7 @@ def classify_misassemblies(
         df_second_outlier = df.filter(
             filter_interval_expr(second_outlier) & (pl.col("second") != 0)
         )
-        df_second_outlier_het_ratio = df_second_outlier.mean().with_columns(
+        df_second_outlier_het_ratio = df_second_outlier.median().with_columns(
             het_ratio=pl.col("second") / (pl.col("first") + pl.col("second"))
         )
         # Use het ratio to classify.
