@@ -44,6 +44,14 @@ options:
                         Bed file with regions to ignore. With format: contig|all start end absolute|relative (default: None)
 ```
 
+### Input
+A BAM file of an alignment of PacBio HiFi reads to an assembly.
+
+> [!IMPORTANT]
+> All assembly contigs, including contaminants, should be included. Omission of these contigs will cause misalignments of reads to elsewhere in the assembly.
+
+Secondary and partial alignments should be removed using SAMtools flag 2308.
+
 ### Configuration
 Configuration can be provided in the form of a `toml` file.
 
@@ -65,6 +73,9 @@ thr_min_valley_width = 10
 thr_peak_height_std_above = 4
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
+# Positions with coverage below this percentile are considered misjoins.
+# ex. 0.001 => 0.1th percentile
+thr_misjoin_valley_height_perc_below = 0.001
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.
 valley_group_distance = 500

@@ -109,10 +109,9 @@ def main():
         os.makedirs(args.output_cov_dir, exist_ok=True)
 
     if isinstance(args.config, io.IOBase):
-        # Fill missing config. Keep user config.
-        config = DEF_CONFIG | tomllib.load(args.config)
+        config = tomllib.load(args.config)
     else:
-        config = DEF_CONFIG | args.config
+        config = args.config
 
     sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
 
