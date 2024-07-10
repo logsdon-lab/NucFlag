@@ -94,9 +94,12 @@ def classify_misassemblies(
     df_gapless = df.filter(pl.col("first") != 0)
     mean_first, stdev_first = df_gapless["first"].mean(), df_gapless["first"].std()
     mean_second, stdev_second = df_gapless["second"].mean(), df_gapless["second"].std()
-    # Calculate misjoin height threshold. Filters for values smaller than 99.9999% of values.
-    misjoin_height_thr = df_gapless["first"].quantile(
-        config["first"]["thr_misjoin_valley_height_perc_below"]
+
+    # Calculate misjoin height threshold. Filters for some percent of the mean or static value.
+    misjoin_height_thr = (
+        mean_first * config["first"]["thr_misjoin_valley"]
+        if isinstance(config["first"]["thr_misjoin_valley"], float)
+        else config["first"]["thr_misjoin_valley"]
     )
     del df_gapless
 
@@ -204,8 +207,11 @@ def classify_misassemblies(
 
             # Get bounds of region and calculate median.
             # Avoid flagging if intersects gap region.
-            valley = pt.open(df_valley["position"].min(), df_valley["position"].max())
-            df_valley = df.filter(filter_interval_expr(valley))
+            df_valley = df.filter(
+                filter_interval_expr(
+                    pt.open(df_valley["position"].min(), df_valley["position"].max())
+                )
+            )
             if df_valley["first"].median() <= misjoin_height_thr and not any(
                 g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
             ):
