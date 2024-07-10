@@ -37,9 +37,11 @@ options:
   -p PROCESSES, --processes PROCESSES
                         Processes for classifying/plotting. (default: 4)
   -c CONFIG, --config CONFIG
-                        Additional threshold/params as toml file. (default: {'first': {'thr_min_peak_horizontal_distance': 10000, 'thr_min_peak_width': 20,
-                        'thr_min_valley_horizontal_distance': 10000, 'thr_min_valley_width': 10, 'thr_peak_height_std_above': 3.2, 'thr_valley_height_std_below': 3}, 'second':
-                        {'thr_min_perc_first': 0.2, 'thr_peak_height_std_above': 3, 'group_distance': 30000, 'thr_min_group_size': 10, 'thr_collapse_het_ratio': 0.2}})
+                        Additional threshold/params as toml file. (default: {'first': {'thr_min_peak_horizontal_distance': 1, 'thr_min_peak_width': 20,
+                        'thr_min_valley_horizontal_distance': 1, 'thr_min_valley_width': 5, 'thr_peak_height_std_above': 3.2, 'thr_valley_height_std_below': 3,
+                        'thr_misjoin_valley': 0.1, 'valley_group_distance': 500, 'peak_group_distance': 500}, 'second': {'thr_min_perc_first': 0.05,
+                        'thr_peak_height_std_above': 3, 'group_distance': 30000, 'thr_min_group_size': 20, 'thr_collapse_het_ratio': 0.2}, 'gaps':
+                        {'thr_max_allowed_gap_size': 0}})
   --ignore_regions IGNORE_REGIONS
                         Bed file with regions to ignore. With format: contig|all start end absolute|relative (default: None)
 ```
@@ -73,9 +75,12 @@ thr_min_valley_width = 10
 thr_peak_height_std_above = 4
 # Number of std below mean to include valley.
 thr_valley_height_std_below = 3
-# Positions with coverage below this percentile are considered misjoins.
-# ex. 0.001 => 0.1th percentile
-thr_misjoin_valley_height_perc_below = 0.001
+# Valleys with coverage below this threshold are considered misjoins.
+# If float:
+# * ex. 0.1 => Valley where median is less than or equal to 10% of mean
+# If int:
+# * ex. 2 => Valleys with median below 2
+thr_misjoin_valley = 0.1
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.
 valley_group_distance = 500

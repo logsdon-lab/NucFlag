@@ -5,12 +5,14 @@ import subprocess
 @pytest.mark.parametrize(
     ["bam", "bed", "expected", "config"],
     [
+        # Standard case
         (
             "test/standard/HG00096_hifi.bam",
             "test/standard/region.bed",
             "test/standard/expected.bed",
             tuple(["-c", "test/config.toml"]),
         ),
+        # Ignore regions
         (
             "test/ignored/HG00731_hifi.bam",
             "test/ignored/region.bed",
@@ -24,11 +26,19 @@ import subprocess
                 ]
             ),
         ),
+        # Static misjoin threshold
         (
             "test/misjoin/HG00171_hifi.bam",
             "test/misjoin/region.bed",
-            "test/misjoin/expected.bed",
-            tuple(["-c", "test/config.toml"]),
+            "test/misjoin/expected_static.bed",
+            tuple(["-c", "test/misjoin/config_static.toml"]),
+        ),
+        # Percent misjoin threshold
+        (
+            "test/misjoin/HG00171_hifi.bam",
+            "test/misjoin/region.bed",
+            "test/misjoin/expected_perc.bed",
+            tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
     ],
 )
