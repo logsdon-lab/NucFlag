@@ -202,17 +202,23 @@ def classify_misassemblies(
                 pl.col("first") <= misjoin_height_thr
             )
             # Skip if fewer than 2 points found.
-            if df_valley.shape[0] < 2:
+            if df_valley.shape[0] < config["first"]["thr_min_valley_width"]:
                 continue
 
             # Get bounds of region and calculate median.
             # Avoid flagging if intersects gap region.
-            df_valley = df.filter(
-                filter_interval_expr(
-                    pt.open(df_valley["position"].min(), df_valley["position"].max())
+            df_valley = (
+                df_valley
+                if df_valley.shape[0] == 1
+                else df.filter(
+                    filter_interval_expr(
+                        pt.open(
+                            df_valley["position"].min(), df_valley["position"].max()
+                        )
+                    )
                 )
             )
-            if df_valley["first"].median() <= misjoin_height_thr and not any(
+            if df_valley["first"].min() <= misjoin_height_thr and not any(
                 g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
             ):
                 misassemblies[Misassembly.MISJOIN].add(valley)
