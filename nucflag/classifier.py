@@ -228,21 +228,7 @@ def classify_misassemblies(
         if second_outlier in classified_second_outliers:
             continue
 
-        df_second_outlier = df.filter(
-            filter_interval_expr(second_outlier) & (pl.col("second") != 0)
-        )
-        df_second_outlier_het_ratio = df_second_outlier.median().with_columns(
-            het_ratio=pl.col("second") / (pl.col("first") + pl.col("second"))
-        )
-        # Use het ratio to classify.
-        # Low ratio consider collapse with var.
-        if (
-            df_second_outlier_het_ratio["het_ratio"][0]
-            < config["second"]["thr_collapse_het_ratio"]
-        ):
-            misassemblies[Misassembly.COLLAPSE_VAR].add(second_outlier)
-        else:
-            misassemblies[Misassembly.MISJOIN].add(second_outlier)
+        misassemblies[Misassembly.HET].add(second_outlier)
 
     # Annotate df with misassembly.
     lf = df.lazy().with_columns(status=pl.lit("Good"))
