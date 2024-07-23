@@ -40,8 +40,8 @@ options:
                         Additional threshold/params as toml file. (default: {'first': {'thr_min_peak_horizontal_distance': 1, 'thr_min_peak_width': 20,
                         'thr_min_valley_horizontal_distance': 1, 'thr_min_valley_width': 5, 'thr_peak_height_std_above': 3.2, 'thr_valley_height_std_below': 3,
                         'thr_misjoin_valley': 0.1, 'valley_group_distance': 500, 'peak_group_distance': 500}, 'second': {'thr_min_perc_first': 0.05,
-                        'thr_peak_height_std_above': 3, 'group_distance': 30000, 'thr_min_group_size': 20, 'thr_collapse_het_ratio': 0.2}, 'gaps':
-                        {'thr_max_allowed_gap_size': 0}})
+                        'thr_peak_height_std_above': 3, 'group_distance': 30000, 'thr_min_group_size': 20},
+                        'gaps': {'thr_max_allowed_gap_size': 0}})
   --ignore_regions IGNORE_REGIONS
                         Bed file with regions to ignore. With format: contig|all start end absolute|relative (default: None)
 ```
@@ -97,8 +97,6 @@ thr_peak_height_std_above = 3
 group_distance = 30_000
 # Min group size.
 thr_min_group_size = 5
-# Het ratio to consider second group a collapse if no overlaps in peaks found.
-thr_collapse_het_ratio = 0.1
 
 [gaps]
 # Allow gaps up to this length.

@@ -45,8 +45,5 @@ group_distance = 30_000
 # Min group size.
 thr_min_group_size = 3
 
-# Het ratio to consider second group a collapse if no overlaps in peaks found.
-thr_collapse_het_ratio = 0.2
-
 [gaps]
 thr_max_allowed_gap_size = 0
