@@ -1,2 +1,2 @@
-all	0	500000	relative
-all	-500000	0	relative
+all	0	500000	none	ignore:relative
+all	-500000	0	none	ignore:relative

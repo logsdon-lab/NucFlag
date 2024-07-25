@@ -2,7 +2,6 @@
 import os
 import io
 import sys
-import pysam
 import pprint
 import tomllib
 import warnings
@@ -16,12 +15,11 @@ from collections import defaultdict
 from typing import DefaultDict
 
 from .classifier import classify_plot_assembly
-from .io import read_ignored_regions, read_regions
+from .io import read_regions, read_asm_regions
 from .region import Region, RegionStatus
 from .config import DEF_CONFIG
 from .constants import (
     PLOT_FONT_SIZE,
-    RGX_REGION,
 )
 
 matplotlib.use("agg")
@@ -34,7 +32,10 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-i", "--input_bam", required=True, help="Input bam file. Must be indexed."
+        "-i",
+        "--infile",
+        required=True,
+        help="Input bam file or per-base coverage tsv file with 3-columns (position, first, second). If a bam file is provided, it must be indexed.",
     )
     parser.add_argument(
         "-b",
@@ -52,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_cov_dir",
         default=None,
-        help="Output coverage dir. Generates coverage bed files per region. Gzipped by default.",
+        help="Output coverage dir. Generates gzipped coverage bed files per region.",
     )
     parser.add_argument(
         "-o",
@@ -67,12 +68,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         type=argparse.FileType("wt"),
         help="Bed file with status of contigs. With format: contig\tstart\tend\tmisassembled|good",
-    )
-    parser.add_argument(
-        "-r",
-        "--regions",
-        nargs="*",
-        help=f"Regions with the format: {RGX_REGION.pattern}",
     )
     parser.add_argument(
         "-t", "--threads", default=4, type=int, help="Threads for reading bam file."
@@ -97,7 +92,12 @@ def parse_args() -> argparse.Namespace:
         type=argparse.FileType("rt"),
         help="Bed file with regions to ignore. With format: contig|all\tstart\tend\tabsolute|relative",
     )
-
+    parser.add_argument(
+        "--overlay_regions",
+        nargs="*",
+        type=argparse.FileType("rt"),
+        help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
+    )
     return parser.parse_args()
 
 
@@ -115,17 +115,16 @@ def main():
 
     sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
 
-    # Read regions in bam.
-    sys.stderr.write(f"Reading in BAM file: {args.input_bam}\n")
-    with pysam.AlignmentFile(args.input_bam, threads=args.threads) as bam:
-        regions = list(read_regions(bam, args))
-
+    # Read regions in bam or from input regions.
+    regions = list(
+        read_asm_regions(args.infile, args.input_regions, threads=args.threads)
+    )
     sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
 
     # Load ignored regions.
     ignored_regions: DefaultDict[str, list[Region]] = defaultdict(list)
     if args.ignore_regions:
-        for region in read_ignored_regions(args.ignore_regions):
+        for region in read_regions(args.ignore_regions):
             ignored_regions[region.name].append(region)
 
         total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
@@ -137,36 +136,51 @@ def main():
             f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
         )
 
+    # Load additional regions to overlay.
+    overlay_regions: DefaultDict[str, DefaultDict[int, list[Region]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    if args.overlay_regions:
+        for i, bed in enumerate(args.overlay_regions):
+            for region in read_regions(bed):
+                overlay_regions[region.name][i].append(region)
+
+        sys.stderr.write(f"Overlapping {len(args.overlay_regions)} bedfile(s).\n")
+
     # Set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
     # results = []
     # for region in regions:
-    #     results.append(classify_plot_assembly(
-    #         args.input_bam,
-    #         args.output_plot_dir,
-    #         args.output_cov_dir,
-    #         args.threads,
-    #         *region,
-    #         config,
-    #         (
-    #             ignored_regions["all"]
-    #             if "all" in ignored_regions
-    #             else ignored_regions.get(region[0])
-    #         ),
-    #     ))
+    #     results.append(
+    #         classify_plot_assembly(
+    #             args.infile,
+    #             args.output_plot_dir,
+    #             args.output_cov_dir,
+    #             args.threads,
+    #             *region,
+    #             config,
+    #             overlay_regions.get(region[0]),
+    #             (
+    #                 ignored_regions["all"]
+    #                 if "all" in ignored_regions
+    #                 else ignored_regions.get(region[0])
+    #             ),
+    #         )
+    #     )
 
     with mp.Pool(processes=args.processes) as pool:
         results = pool.starmap(
             classify_plot_assembly,
             [
                 (
-                    args.input_bam,
+                    args.infile,
                     args.output_plot_dir,
                     args.output_cov_dir,
                     args.threads,
                     *region,
                     config,
+                    overlay_regions.get(region[0]),
                     # "all" takes precedence.
                     (
                         ignored_regions["all"]

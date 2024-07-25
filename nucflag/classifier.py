@@ -16,7 +16,7 @@ from .constants import PLOT_DPI
 from .misassembly import Misassembly
 from .region import Region
 
-from typing import Any
+from typing import Any, DefaultDict
 from collections import defaultdict
 
 
@@ -74,26 +74,17 @@ def filter_interval_expr(interval: pt.Interval, *, col: str = "position") -> pl.
 
 
 def classify_misassemblies(
-    cov_first_second: np.ndarray,
-    positions: np.ndarray,
+    df_cov: pl.DataFrame,
     *,
     config: dict[str, Any],
     ignored_regions: list[Region] | None,
 ) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
-    df = pl.DataFrame(
-        {
-            "position": positions,
-            "first": cov_first_second[0],
-            "second": cov_first_second[1],
-        }
-    )
-    del cov_first_second
-
     # Calculate std and mean for both most and second most freq read.
     # Remove gaps which would artificially lower mean.
-    df_gapless = df.filter(pl.col("first") != 0)
+    df_gapless = df_cov.filter(pl.col("first") != 0)
     mean_first, stdev_first = df_gapless["first"].mean(), df_gapless["first"].std()
     mean_second, stdev_second = df_gapless["second"].mean(), df_gapless["second"].std()
+    del df_gapless
 
     # Calculate misjoin height threshold. Filters for some percent of the mean or static value.
     misjoin_height_thr = (
@@ -101,7 +92,6 @@ def classify_misassemblies(
         if isinstance(config["first"]["thr_misjoin_valley"], float)
         else config["first"]["thr_misjoin_valley"]
     )
-    del df_gapless
 
     first_peak_height_thr = mean_first + (
         config["first"]["thr_peak_height_std_above"] * stdev_first
@@ -111,16 +101,16 @@ def classify_misassemblies(
     )
 
     first_peak_coords = peak_finder(
-        df["first"],
-        positions,
+        df_cov["first"],
+        df_cov["position"],
         height=first_peak_height_thr,
         distance=config["first"]["thr_min_peak_horizontal_distance"],
         width=config["first"]["thr_min_peak_width"],
         group_distance=config["first"]["peak_group_distance"],
     )
     first_valley_coords = peak_finder(
-        -df["first"],
-        positions,
+        -df_cov["first"],
+        df_cov["position"],
         # Account for when thr goes negative.
         height=-(
             misjoin_height_thr
@@ -141,7 +131,7 @@ def classify_misassemblies(
     )
 
     classified_second_outliers = set()
-    df_second_outliers = df.filter(pl.col("second") > second_thr)
+    df_second_outliers = df_cov.filter(pl.col("second") > second_thr)
     # Group consecutive positions allowing a maximum gap of stepsize.
     # Larger stepsize groups more positions.
     second_outliers_coords = []
@@ -163,14 +153,16 @@ def classify_misassemblies(
 
         if peak not in misassemblies[Misassembly.COLLAPSE_VAR]:
             local_mean_collapse_first = (
-                df.filter(filter_interval_expr(peak)).median().get_column("first")[0]
+                df_cov.filter(filter_interval_expr(peak))
+                .median()
+                .get_column("first")[0]
             )
             # If local median of suspected collapsed region is greater than thr, is a collapse.
             if local_mean_collapse_first > first_peak_height_thr:
                 misassemblies[Misassembly.COLLAPSE].add(peak)
 
     # Classify gaps.
-    df_gaps = df.filter(pl.col("first") == 0)
+    df_gaps = df_cov.filter(pl.col("first") == 0)
     gaps = set()
     for grp in consecutive(df_gaps["position"], stepsize=1):
         if len(grp) < 2:
@@ -198,7 +190,7 @@ def classify_misassemblies(
         # Treat as a misjoin.
         if valley not in misassemblies[Misassembly.MISJOIN]:
             # Filter first to get general region.
-            df_valley = df.filter(filter_interval_expr(valley)).filter(
+            df_valley = df_cov.filter(filter_interval_expr(valley)).filter(
                 pl.col("first") <= misjoin_height_thr
             )
             # Skip if fewer than 2 points found.
@@ -210,7 +202,7 @@ def classify_misassemblies(
             df_valley = (
                 df_valley
                 if df_valley.shape[0] == 1
-                else df.filter(
+                else df_cov.filter(
                     filter_interval_expr(
                         pt.open(
                             df_valley["position"].min(), df_valley["position"].max()
@@ -228,7 +220,7 @@ def classify_misassemblies(
         if second_outlier in classified_second_outliers:
             continue
 
-        df_second_outlier = df.filter(
+        df_second_outlier = df_cov.filter(
             filter_interval_expr(second_outlier) & (pl.col("second") != 0)
         )
         df_second_outlier_het_ratio = df_second_outlier.median().with_columns(
@@ -245,9 +237,9 @@ def classify_misassemblies(
             misassemblies[Misassembly.MISJOIN].add(second_outlier)
 
     # Annotate df with misassembly.
-    lf = df.lazy().with_columns(status=pl.lit("Good"))
+    lf = df_cov.lazy().with_columns(status=pl.lit("Good"))
 
-    contig_region = pt.open(positions[0], positions[-1])
+    contig_region = pt.open(df_cov["position"][0], df_cov["position"][-1])
     if not ignored_regions:
         ignored_regions = []
 
@@ -275,7 +267,7 @@ def classify_misassemblies(
 
 
 def classify_plot_assembly(
-    input_bam: str,
+    infile: str,
     output_dir: str | None,
     output_cov_dir: str | None,
     threads: int,
@@ -283,24 +275,36 @@ def classify_plot_assembly(
     start: int,
     end: int,
     config: dict[str, Any],
+    overlay_regions: DefaultDict[int, list[Region]] | None,
     ignored_regions: list[Region] | None,
 ) -> pl.DataFrame:
-    bam = pysam.AlignmentFile(input_bam, threads=threads)
     contig_name = f"{contig}:{start}-{end}"
-
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
 
-    df_group_labeled, misassemblies = classify_misassemblies(
-        np.flip(
+    try:
+        bam = pysam.AlignmentFile(infile, threads=threads)
+        cov_first_second = np.flip(
             np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
-        ).transpose(),
-        np.arange(start, end),
+        ).transpose()
+        df = pl.DataFrame(
+            {
+                "position": np.arange(start, end),
+                "first": cov_first_second[0],
+                "second": cov_first_second[1],
+            }
+        )
+        del cov_first_second
+    except ValueError:
+        df = pl.read_csv(infile, separator="\t", has_header=True)
+
+    df_group_labeled, misassemblies = classify_misassemblies(
+        df,
         config=config,
         ignored_regions=ignored_regions,
     )
 
     if output_dir:
-        _ = plot_coverage(df_group_labeled, misassemblies, contig)
+        _ = plot_coverage(df_group_labeled, misassemblies, contig, overlay_regions)
 
         sys.stderr.write(f"Plotting {contig_name}.\n")
 
