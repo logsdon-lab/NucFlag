@@ -141,7 +141,7 @@ hap1-0000001	10	50	test	ignore:absolute
 ```
 
 #### `--overlap_regions`
-Regions can also be added as tracks via a 5-column BED file and the `--overlap_regions` flag.
+Regions can also be added as tracks via a 5-column BED file and the `--overlap_regions` flag and `plot` as the action.
 ```bash
 nucflag -i NA20847.bam -b region.bed --overlap_regions NA20847_repeatmasker.bed
 ```
@@ -151,6 +151,16 @@ NA20847_rc-chr3_haplotype2-0000105	89883812	89884058	LTR	plot
 NA20847_rc-chr3_haplotype2-0000105	89884065	89884093	Simple_repeat	plot
 NA20847_rc-chr3_haplotype2-0000105	89884094	89884130	Simple_repeat	plot
 ...
+```
+
+To set colors for a specific row, add a semicolon and specific either RGB values or a color name:
+```
+NA20847_rc-chr3_haplotype2-0000105	91342006	93283719	HSat1A	plot:gray
+NA20847_rc-chr3_haplotype2-0000105	93283720	93283764	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93283768	93283899	HSat1A	plot:gray
+NA20847_rc-chr3_haplotype2-0000105	93283918	93284310	HSat1A	plot:gray
+NA20847_rc-chr3_haplotype2-0000105	93284411	93284456	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93284462	93704128	HSat1A	plot:gray
 ```
 
 ![Overlap Bed](docs/imgs/overlap.png)
