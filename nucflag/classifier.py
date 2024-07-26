@@ -144,7 +144,7 @@ def classify_misassemblies(
     df_second_outliers = df.filter(pl.col("second") > second_thr)
     # Group consecutive positions allowing a maximum gap of stepsize.
     # Larger stepsize groups more positions.
-    second_outliers_coords = []
+    second_outliers_coords: list[pt.Interval] = []
     for grp in consecutive(
         df_second_outliers["position"], stepsize=config["second"]["group_distance"]
     ):
@@ -156,17 +156,18 @@ def classify_misassemblies(
 
     # Intersect intervals and classify collapses.
     for peak in first_peak_coords:
+        local_max_collapse_first = (
+            df.filter(filter_interval_expr(peak)).max().get_column("first")[0]
+        )
         for second_outlier in second_outliers_coords:
-            if second_outlier in peak:
-                misassemblies[Misassembly.COLLAPSE_VAR].add(peak)
-                classified_second_outliers.add(second_outlier)
+            # If local max of suspected collapsed region is greater than thr, is a collapse.
+            if local_max_collapse_first < first_peak_height_thr:
+                continue
 
-        if peak not in misassemblies[Misassembly.COLLAPSE_VAR]:
-            local_mean_collapse_first = (
-                df.filter(filter_interval_expr(peak)).median().get_column("first")[0]
-            )
-            # If local median of suspected collapsed region is greater than thr, is a collapse.
-            if local_mean_collapse_first > first_peak_height_thr:
+            if peak.overlaps(second_outlier):
+                misassemblies[Misassembly.COLLAPSE_VAR].add(peak.union(second_outlier))
+                classified_second_outliers.add(second_outlier)
+            else:
                 misassemblies[Misassembly.COLLAPSE].add(peak)
 
     # Classify gaps.
@@ -188,15 +189,18 @@ def classify_misassemblies(
 
     # Classify misjoins.
     for valley in first_valley_coords:
+        extended_valleys: set[pt.Interval] = set()
         for second_outlier in second_outliers_coords:
-            if second_outlier in valley:
-                misassemblies[Misassembly.MISJOIN].add(valley)
+            if valley.overlaps(second_outlier):
+                # Merge intervals.
+                misassemblies[Misassembly.MISJOIN].add(valley.union(second_outlier))
+                extended_valleys.add(valley)
                 classified_second_outliers.add(second_outlier)
 
         # Otherwise, check if valley's median falls below threshold.
         # This means that while no overlapping secondary reads, low coverage means likely elsewhere.
         # Treat as a misjoin.
-        if valley not in misassemblies[Misassembly.MISJOIN]:
+        if valley not in extended_valleys:
             # Filter first to get general region.
             df_valley = df.filter(filter_interval_expr(valley)).filter(
                 pl.col("first") <= misjoin_height_thr
