@@ -1,11 +1,12 @@
 import sys
-import pysam
+from collections import defaultdict
+from typing import DefaultDict, Generator, Iterable, TextIO
 
 import numpy as np
 import portion as pt
+import pysam
 
 from .region import Action, ActionOpt, IgnoreOpt, Region
-from typing import TextIO, Generator
 
 
 def get_coverage_by_base(
@@ -65,18 +66,58 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
         except IndexError:
             desc = None
         try:
-            action_str = other[1]
-            action_opt, _, action_desc = action_str.partition(":")
-            action_opt = ActionOpt(action_opt)
-            # TODO: Should be delimited by commas in case multiple needed.
-            if action_opt == ActionOpt.IGNORE:
-                action_desc = IgnoreOpt(action_desc)
-            elif action_opt == ActionOpt.PLOT:
-                action_desc = action_desc
-            else:
-                action_desc = None
-            action = Action(action_opt, action_desc)
-        except IndexError:
-            action = None
+            actions_str = other[1]
+            # Split actions column.
+            # TODO: Or use multi-cols?
+            for action_str in actions_str.split(","):
+                action_opt, _, action_desc = action_str.partition(":")
+                action_opt = ActionOpt(action_opt)
+                if action_opt == ActionOpt.IGNORE:
+                    action_desc = IgnoreOpt(action_desc)
+                elif action_opt == ActionOpt.PLOT:
+                    action_desc = action_desc
+                else:
+                    action_desc = None
 
-        yield Region(name=ctg, region=pt.open(start, end), desc=desc, action=action)
+                yield Region(
+                    name=ctg,
+                    region=pt.open(start, end),
+                    desc=desc,
+                    action=Action(action_opt, action_desc),
+                )
+        except IndexError:
+            continue
+
+
+def read_ignored_regions(infile: TextIO) -> DefaultDict[str, set[Region]]:
+    ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
+    for region in read_regions(infile):
+        ignored_regions[region.name].add(region)
+
+    return ignored_regions
+
+
+def read_overlay_regions(
+    infiles: Iterable[TextIO],
+    *,
+    ignored_regions: DefaultDict[str, set[Region]] | None = None,
+) -> DefaultDict[str, DefaultDict[int, set[Region]]]:
+    """
+    Read input overlay BED files and optionally updated ignored regions if any are specified.
+    """
+    overlay_regions: DefaultDict[str, DefaultDict[int, set[Region]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
+    for i, bed in enumerate(infiles):
+        for region in read_regions(bed):
+            # Add region to ignored regions.
+            if (
+                isinstance(ignored_regions, defaultdict)
+                and region.action
+                and (region.action.opt == ActionOpt.IGNORE)
+            ):
+                ignored_regions[region.name].add(region)
+            else:
+                overlay_regions[region.name][i].add(region)
+
+    return overlay_regions

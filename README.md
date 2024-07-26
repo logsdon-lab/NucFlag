@@ -141,7 +141,7 @@ hap1-0000001	10	50	test	ignore:absolute
 ```
 
 #### `--overlap_regions`
-Regions can also be added as tracks via a 5-column BED file and the `--overlap_regions` flag and `plot` as the action.
+Regions can also be added as tracks via a 5-column BED file and the `--overlap_regions` flag and `plot/ignore` as the action.
 ```bash
 nucflag -i NA20847.bam -b region.bed --overlap_regions NA20847_repeatmasker.bed
 ```
@@ -164,6 +164,19 @@ NA20847_rc-chr3_haplotype2-0000105	93284462	93704128	HSat1A	plot:gray
 ```
 
 ![Overlap Bed](docs/imgs/overlap.png)
+
+To ignore misassemblies in specific sections, the 5th column can be extended with the `ignore:absolute` action.
+```
+NA20847_rc-chr3_haplotype2-0000105	91342006	93283719	HSat1A	plot:gray,ignore:absolute
+NA20847_rc-chr3_haplotype2-0000105	93283720	93283764	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93283768	93283899	HSat1A	plot:gray,ignore:absolute
+NA20847_rc-chr3_haplotype2-0000105	93283918	93284310	HSat1A	plot:gray,ignore:absolute
+NA20847_rc-chr3_haplotype2-0000105	93284411	93284456	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93284462	93704128	HSat1A	plot:gray,ignore:absolute
+```
+
+![Overlap Ignore Bed](docs/imgs/overlap_ignore.png)
+> Here, we ignore misassemblies in HSat1A regions.
 
 
 ## Workflow

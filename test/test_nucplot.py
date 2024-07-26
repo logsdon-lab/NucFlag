@@ -1,6 +1,9 @@
 import os
-import pytest
 import subprocess
+
+import imagehash
+import pytest
+from PIL import Image
 
 
 @pytest.mark.parametrize(
@@ -75,7 +78,22 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
                 ),
             )
             for i in range(1, 4)
-        ]
+        ],
+        # Ignore a position.
+        (
+            "test/overlay/NA20847_rc-chr3_haplotype2-0000105:89881870-96384969.bed.gz",
+            "test/overlay/region.bed",
+            "test/overlay/expected/ignore/",
+            "test/overlay/output_ignore/",
+            tuple(
+                [
+                    "-c",
+                    "test/config.toml",
+                    "--overlay_regions",
+                    "test/overlay/repeatmasker_ignore.bed",
+                ]
+            ),
+        ),
     ],
 )
 def test_correct_plot(
@@ -108,8 +126,11 @@ def test_correct_plot(
         exp_plot_path = os.path.join(expected_dir, f"{ctg}.png")
         out_plot_path = os.path.join(output_dir, f"{ctg}.png")
 
-        # https://stackoverflow.com/a/34669225
-        assert open(exp_plot_path, "rb").read() == open(out_plot_path, "rb").read()
+        # https://stackoverflow.com/q/49595541
+        # Perceptual hash to compare features.
+        assert imagehash.phash(Image.open(exp_plot_path)) == imagehash.phash(
+            Image.open(out_plot_path)
+        )
 
         # Remove outplot
         os.remove(out_plot_path)

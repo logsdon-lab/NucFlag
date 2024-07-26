@@ -1,22 +1,23 @@
+from typing import Any, DefaultDict
+
+import matplotlib
+import matplotlib.axes
+import matplotlib.patches as ptch
+import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import portion as pt
-import matplotlib
-import matplotlib.axes
-import matplotlib.pyplot as plt
-import matplotlib.patches as ptch
 
-from .constants import PLOT_WIDTH, PLOT_HEIGHT, PLOT_YLIM, PLOT_HEIGHT_SCALE_FACTOR
+from .constants import PLOT_HEIGHT, PLOT_HEIGHT_SCALE_FACTOR, PLOT_WIDTH, PLOT_YLIM
 from .misassembly import Misassembly
 from .region import ActionOpt, Region
-from typing import Any, DefaultDict
 
 
 def plot_coverage(
     df: pl.DataFrame,
     misassemblies: dict[Misassembly, set[pt.Interval]],
     contig_name: str,
-    overlay_regions: DefaultDict[int, list[Region]] | None,
+    overlay_regions: DefaultDict[int, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
     region_bounds = pt.open(df["position"].min(), df["position"].max())
 

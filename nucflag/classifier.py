@@ -1,23 +1,22 @@
-import os
-import sys
 import gzip
-import pysam
+import os
 import shutil
-import scipy.signal
+import sys
+from collections import defaultdict
+from typing import Any, DefaultDict
 
+import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import portion as pt
-import matplotlib.pyplot as plt
+import pysam
+import scipy.signal
 
-from .io import get_coverage_by_base
-from .plot import plot_coverage
 from .constants import PLOT_DPI
+from .io import get_coverage_by_base
 from .misassembly import Misassembly
-from .region import Region
-
-from typing import Any, DefaultDict
-from collections import defaultdict
+from .plot import plot_coverage
+from .region import Region, update_relative_ignored_regions
 
 
 def peak_finder(
@@ -77,7 +76,7 @@ def classify_misassemblies(
     df_cov: pl.DataFrame,
     *,
     config: dict[str, Any],
-    ignored_regions: list[Region] | None,
+    ignored_regions: list[Region],
 ) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
     # Calculate std and mean for both most and second most freq read.
     # Remove gaps which would artificially lower mean.
@@ -239,17 +238,14 @@ def classify_misassemblies(
     # Annotate df with misassembly.
     lf = df_cov.lazy().with_columns(status=pl.lit("Good"))
 
-    contig_region = pt.open(df_cov["position"][0], df_cov["position"][-1])
-    if not ignored_regions:
-        ignored_regions = []
-
     filtered_misassemblies = defaultdict(set)
     for mtype, regions in misassemblies.items():
         remove_regions = set()
         for region in regions:
             # Remove ignored regions.
+            # TODO: This still could be better. O(n). Would need to rewrite and use an interval tree.
             if any(
-                ignored_region.contains(region, full=contig_region)
+                ignored_region.region.overlaps(region)
                 for ignored_region in ignored_regions
             ):
                 remove_regions.add(region)
@@ -275,8 +271,8 @@ def classify_plot_assembly(
     start: int,
     end: int,
     config: dict[str, Any],
-    overlay_regions: DefaultDict[int, list[Region]] | None,
-    ignored_regions: list[Region] | None,
+    overlay_regions: DefaultDict[int, set[Region]] | None,
+    ignored_regions: set[Region],
 ) -> pl.DataFrame:
     contig_name = f"{contig}:{start}-{end}"
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
@@ -297,10 +293,15 @@ def classify_plot_assembly(
     except ValueError:
         df = pl.read_csv(infile, separator="\t", has_header=True)
 
+    # Update ignored regions if relative.
+    updated_ignored_regions = list(
+        update_relative_ignored_regions(ignored_regions, ctg_start=start, ctg_end=end)
+    )
+
     df_group_labeled, misassemblies = classify_misassemblies(
         df,
         config=config,
-        ignored_regions=ignored_regions,
+        ignored_regions=updated_ignored_regions,
     )
 
     if output_dir:

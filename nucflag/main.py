@@ -1,26 +1,29 @@
 #!/usr/bin/env python
-import os
-import io
-import sys
-import pprint
-import tomllib
-import warnings
 import argparse
-import matplotlib
-
-import polars as pl
+import io
 import multiprocessing as mp
-
+import os
+import pprint
+import sys
+import warnings
 from collections import defaultdict
 from typing import DefaultDict
 
+import matplotlib
+import polars as pl
+import tomllib
+
 from .classifier import classify_plot_assembly
-from .io import read_regions, read_asm_regions
-from .region import Region, RegionStatus
 from .config import DEF_CONFIG
 from .constants import (
     PLOT_FONT_SIZE,
 )
+from .io import (
+    read_asm_regions,
+    read_ignored_regions,
+    read_overlay_regions,
+)
+from .region import Region, RegionStatus
 
 matplotlib.use("agg")
 warnings.filterwarnings("ignore")
@@ -122,30 +125,39 @@ def main():
     sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
 
     # Load ignored regions.
-    ignored_regions: DefaultDict[str, list[Region]] = defaultdict(list)
     if args.ignore_regions:
-        for region in read_regions(args.ignore_regions):
-            ignored_regions[region.name].append(region)
-
+        ignored_regions: DefaultDict[str, set[Region]] = read_ignored_regions(
+            args.ignore_regions
+        )
         total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
         total_ignored_regions = len(
             regions if "all" in ignored_regions else ignored_regions
         )
-
         sys.stderr.write(
             f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
         )
+    else:
+        total_ignored_positions = 0
+        ignored_regions = defaultdict(set)
 
     # Load additional regions to overlay.
-    overlay_regions: DefaultDict[str, DefaultDict[int, list[Region]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
     if args.overlay_regions:
-        for i, bed in enumerate(args.overlay_regions):
-            for region in read_regions(bed):
-                overlay_regions[region.name][i].append(region)
-
+        overlay_regions: DefaultDict[str, DefaultDict[int, set[Region]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
+        # Pass reference of overlay regions to update.
+        overlay_regions = read_overlay_regions(
+            args.overlay_regions, ignored_regions=ignored_regions
+        )
+        added_ignored_positions = (
+            sum(len(v) for _, v in ignored_regions.items()) - total_ignored_positions
+        )
         sys.stderr.write(f"Overlapping {len(args.overlay_regions)} bedfile(s).\n")
+        sys.stderr.write(
+            f"Added {added_ignored_positions} ignored position(s) from bedfile(s).\n"
+        )
+    else:
+        overlay_regions = defaultdict(lambda: defaultdict(set))
 
     # Set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
@@ -161,11 +173,7 @@ def main():
     #             *region,
     #             config,
     #             overlay_regions.get(region[0]),
-    #             (
-    #                 ignored_regions["all"]
-    #                 if "all" in ignored_regions
-    #                 else ignored_regions.get(region[0])
-    #             ),
+    #             ignored_regions.get("all", set()).union(ignored_regions.get(region[0], set())),
     #         )
     #     )
 
@@ -181,11 +189,8 @@ def main():
                     *region,
                     config,
                     overlay_regions.get(region[0]),
-                    # "all" takes precedence.
-                    (
-                        ignored_regions["all"]
-                        if "all" in ignored_regions
-                        else ignored_regions.get(region[0])
+                    ignored_regions.get("all", set()).union(
+                        ignored_regions.get(region[0], set())
                     ),
                 )
                 for region in regions
