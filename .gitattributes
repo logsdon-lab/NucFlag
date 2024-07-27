@@ -1,3 +1,6 @@
 test/ignored/HG00731_hifi.bam filter=lfs diff=lfs merge=lfs -text
 test/misjoin/HG00171_hifi.bam filter=lfs diff=lfs merge=lfs -text
 test/standard/HG00096_hifi.bam filter=lfs diff=lfs merge=lfs -text
+test/overlay/NA20847_rc-chr3_haplotype2-0000105:89881870-96384969.bed.gz filter=lfs diff=lfs merge=lfs -text
+test/overlay/repeatmasker.bed filter=lfs diff=lfs merge=lfs -text
+test/overlay/repeatmasker_ignore.bed filter=lfs diff=lfs merge=lfs -text

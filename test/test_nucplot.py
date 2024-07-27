@@ -1,5 +1,9 @@
-import pytest
+import os
 import subprocess
+
+import imagehash
+import pytest
+from PIL import Image
 
 
 @pytest.mark.parametrize(
@@ -52,3 +56,84 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
     with open(expected, "rt") as exp_res_fh:
         exp_res = [line.strip().split("\t") for line in exp_res_fh.readlines() if line]
         assert res == exp_res
+
+
+@pytest.mark.parametrize(
+    ["cov", "bed", "expected_dir", "output_dir", "config"],
+    [
+        # Overlay many beds.
+        *[
+            (
+                "test/overlay/NA20847_rc-chr3_haplotype2-0000105:89881870-96384969.bed.gz",
+                "test/overlay/region.bed",
+                f"test/overlay/expected/{i}",
+                f"test/overlay/output_{i}/",
+                tuple(
+                    [
+                        "-c",
+                        "test/config.toml",
+                        "--overlay_regions",
+                        *["test/overlay/repeatmasker.bed" for _ in range(i)],
+                    ]
+                ),
+            )
+            for i in range(1, 4)
+        ],
+        # Ignore a position.
+        (
+            "test/overlay/NA20847_rc-chr3_haplotype2-0000105:89881870-96384969.bed.gz",
+            "test/overlay/region.bed",
+            "test/overlay/expected/ignore/",
+            "test/overlay/output_ignore/",
+            tuple(
+                [
+                    "-c",
+                    "test/config.toml",
+                    "--overlay_regions",
+                    "test/overlay/repeatmasker_ignore.bed",
+                ]
+            ),
+        ),
+    ],
+)
+def test_correct_plot(
+    cov: str, bed: str, expected_dir: str, output_dir: str, config: tuple[str]
+):
+    contigs = []
+    with open(bed, "rt") as fh:
+        for line in fh.readlines():
+            name, start, stop = line.strip().split("\t")
+            contigs.append(f"{name}:{start}-{stop}")
+
+    _ = subprocess.run(
+        [
+            "python",
+            "-m",
+            "nucflag.main",
+            "-i",
+            cov,
+            "-b",
+            bed,
+            "-d",
+            output_dir,
+            *config,
+        ],
+        capture_output=True,
+        check=True,
+    )
+
+    for ctg in contigs:
+        exp_plot_path = os.path.join(expected_dir, f"{ctg}.png")
+        out_plot_path = os.path.join(output_dir, f"{ctg}.png")
+
+        # https://stackoverflow.com/q/49595541
+        # Perceptual hash to compare features.
+        assert imagehash.phash(Image.open(exp_plot_path)) == imagehash.phash(
+            Image.open(out_plot_path)
+        )
+
+        # Remove outplot
+        os.remove(out_plot_path)
+
+    # Remove output dir.
+    os.rmdir(output_dir)

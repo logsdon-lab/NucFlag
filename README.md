@@ -12,26 +12,25 @@ pip install nucflag
 ```
 
 ```
-usage: nucflag [-h] -i INPUT_BAM [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [--output_cov_dir OUTPUT_COV_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-r [REGIONS ...]] [-t THREADS] [-p PROCESSES] [-c CONFIG] [--ignore_regions IGNORE_REGIONS]
+usage: nucflag [-h] -i INFILE [-b INPUT_REGIONS] [-d OUTPUT_PLOT_DIR] [--output_cov_dir OUTPUT_COV_DIR] [-o OUTPUT_MISASM] [-s OUTPUT_STATUS] [-t THREADS] [-p PROCESSES] [-c CONFIG] [--ignore_regions IGNORE_REGIONS] [--overlay_regions [OVERLAY_REGIONS ...]]
 
 Use per-base read coverage to classify/plot misassemblies.
 
 options:
   -h, --help            show this help message and exit
-  -i INPUT_BAM, --input_bam INPUT_BAM
-                        Input bam file. Must be indexed. (default: None)
+  -i INFILE, --infile INFILE
+                        Input bam file or per-base coverage tsv file with 3-columns (position, first, second). If a bam file is provided, it must be indexed. (default:
+                        None)
   -b INPUT_REGIONS, --input_regions INPUT_REGIONS
                         Bed file with regions to check. (default: None)
   -d OUTPUT_PLOT_DIR, --output_plot_dir OUTPUT_PLOT_DIR
                         Output plot dir. (default: None)
   --output_cov_dir OUTPUT_COV_DIR
-                        Output coverage dir. Generates coverage bed files per region. Gzipped by default. (default: None)
+                        Output coverage dir. Generates gzipped coverage bed files per region. (default: None)
   -o OUTPUT_MISASM, --output_misasm OUTPUT_MISASM
                         Output bed file with misassembled regions. (default: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>)
   -s OUTPUT_STATUS, --output_status OUTPUT_STATUS
                         Bed file with status of contigs. With format: contig start end misassembled|good (default: None)
-  -r [REGIONS ...], --regions [REGIONS ...]
-                        Regions with the format: (.+):(\d+)-(\d+) (default: None)
   -t THREADS, --threads THREADS
                         Threads for reading bam file. (default: 4)
   -p PROCESSES, --processes PROCESSES
@@ -44,6 +43,8 @@ options:
                         'gaps': {'thr_max_allowed_gap_size': 0}})
   --ignore_regions IGNORE_REGIONS
                         Bed file with regions to ignore. With format: contig|all start end absolute|relative (default: None)
+  --overlay_regions [OVERLAY_REGIONS ...]
+                        Overlay additional regions as 4-column bedfile alongside coverage plot. (default: None)
 ```
 
 ### Input
@@ -55,7 +56,9 @@ A BAM file of an alignment of PacBio HiFi reads to an assembly.
 Secondary and partial alignments should be removed using SAMtools flag 2308.
 
 ### Configuration
-Configuration can be provided in the form of a `toml` file.
+
+#### `--config`
+Configuration can be provided in the form of a `toml` file and the `--config` flag.
 
 ```bash
 nucflag -i test/HG00096_hifi_test.bam -b test/test.bed -c config.toml
@@ -102,6 +105,77 @@ thr_min_group_size = 5
 # Allow gaps up to this length.
 thr_max_allowed_gap_size = 1000
 ```
+
+#### `--ignore_regions`
+
+Specific regions can be ignored via a 5-column BED file and the `--ignore_regions` flag.
+
+```bash
+nucflag -i NA20847.bam -b region.bed --ignore_regions ignore.bed
+```
+
+|contig|start|stop|desc|action|
+|-|-|-|-|-|
+|all|0|500000|-|ignore:relative|
+|all|-500000|0|-|ignore:relative|
+|ctg_name|0|500000|-|ignore:absolute|
+
+Two options are posible for `ignore` action.
+* `relative`
+  * Coordinates will be relative to the full length of the contig and a position of `0` will anchor which side to ignore.
+
+* `absolute`
+  * Misassemblies within the bounds of the contig and the coordinates will be ignored.
+
+> Ex. Ignores misasemblies within 500kbp of the edges of all contigs.
+```
+all	0	500000	pericentromere	ignore:relative
+all	-500000	0	pericentromere	ignore:relative
+```
+
+> Ex. Ignores misasemblies between 10bp to 50bp on `hap1-0000001`.
+```
+hap1-0000001	10	50	test	ignore:absolute
+```
+
+#### `--overlap_regions`
+Regions can also be added as tracks via a 5-column BED file and the `--overlap_regions` flag and `plot/ignore` as the action.
+```bash
+nucflag -i NA20847.bam -b region.bed --overlap_regions NA20847_repeatmasker.bed
+```
+```
+NA20847_rc-chr3_haplotype2-0000105	89882645	89883610	LTR	plot
+NA20847_rc-chr3_haplotype2-0000105	89883812	89884058	LTR	plot
+NA20847_rc-chr3_haplotype2-0000105	89884065	89884093	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	89884094	89884130	Simple_repeat	plot
+...
+```
+
+To set colors for a specific row, add a semicolon and specific either RGB values or a color name:
+```
+NA20847_rc-chr3_haplotype2-0000105	91342006	93283719	HSat1A	plot:gray
+NA20847_rc-chr3_haplotype2-0000105	93283720	93283764	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93283768	93283899	HSat1A	plot:gray
+NA20847_rc-chr3_haplotype2-0000105	93283918	93284310	HSat1A	plot:gray
+NA20847_rc-chr3_haplotype2-0000105	93284411	93284456	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93284462	93704128	HSat1A	plot:gray
+```
+
+![Overlap Bed](docs/imgs/overlap.png)
+
+To ignore misassemblies in specific sections, the 5th column can be extended with the `ignore:absolute` action.
+```
+NA20847_rc-chr3_haplotype2-0000105	91342006	93283719	HSat1A	plot:gray,ignore:absolute
+NA20847_rc-chr3_haplotype2-0000105	93283720	93283764	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93283768	93283899	HSat1A	plot:gray,ignore:absolute
+NA20847_rc-chr3_haplotype2-0000105	93283918	93284310	HSat1A	plot:gray,ignore:absolute
+NA20847_rc-chr3_haplotype2-0000105	93284411	93284456	Simple_repeat	plot
+NA20847_rc-chr3_haplotype2-0000105	93284462	93704128	HSat1A	plot:gray,ignore:absolute
+```
+
+![Overlap Ignore Bed](docs/imgs/overlap_ignore.png)
+> Here, we ignore misassemblies in HSat1A regions.
+
 
 ## Workflow
 For an end-to-end workflow, see [`Snakemake-NucFlag`](https://github.com/logsdon-lab/Snakemake-NucFlag).
@@ -157,7 +231,3 @@ snakemake \
 - **Vollger MR**, Dishuck PC, Sorensen M, Welch AE, Dang V, Dougherty ML, et al. Long-read sequence and assembly of segmental duplications. Nat Methods. 2019;16: 88–94. doi:10.1038/s41592-018-0236-3
 - **Mc Cartney AM**, Shafin K, Alonge M, Bzikadze AV, Formenti G, Fungtammasan A, et al. Chasing perfection: validation and polishing strategies for telomere-to-telomere genome assemblies. bioRxiv. 2021. p. 2021.07.02.450803. doi:10.1101/2021.07.02.450803
   * Citing `hetDetection.R`
-
-## TODO
-- Add false duplication detection.
-- Colormap for `Misassembly`

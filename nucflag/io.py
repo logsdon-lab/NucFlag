@@ -1,15 +1,12 @@
-import re
 import sys
-import pysam
-import argparse
+from collections import defaultdict
+from typing import DefaultDict, Generator, Iterable, TextIO
 
 import numpy as np
 import portion as pt
+import pysam
 
-from .region import Region, RegionMode
-from .constants import RGX_REGION
-
-from typing import TextIO, Generator
+from .region import Action, ActionOpt, IgnoreOpt, Region
 
 
 def get_coverage_by_base(
@@ -32,57 +29,95 @@ def read_bed_file(
         yield (chrm, int(start), int(end), other)
 
 
-def read_regions(
-    bam: pysam.AlignmentFile, args: argparse.Namespace
+def read_asm_regions(
+    bamfile: str, input_regions: TextIO | None, *, threads: int = 4
 ) -> Generator[tuple[str, int, int], None, None]:
-    if args.regions is not None or args.input_regions is not None:
-        if args.regions is not None:
-            sys.stderr.write(f"Reading in {len(args.regions)} region(s).\n")
+    if input_regions:
+        sys.stderr.write(f"Reading in regions from {input_regions.name}.\n")
 
-            for region in args.regions:
-                match = re.match(RGX_REGION, region)
-                assert match, region + " not valid!"
-                chrm, start, end = match.groups()
-                yield (chrm, int(start), int(end))
-
-        if args.input_regions is not None:
-            sys.stderr.write(f"Reading in regions from {args.input_regions.name}.\n")
-
-            yield from (
-                (ctg, start, stop)
-                for ctg, start, stop, *_ in read_bed_file(args.input_regions)
-            )
+        yield from (
+            (ctg, start, stop) for ctg, start, stop, *_ in read_bed_file(input_regions)
+        )
     else:
         refs = {}
+        with pysam.AlignmentFile(bamfile, threads=threads) as bam:
+            sys.stderr.write(f"Reading entire {bam} because no bedfile was provided.\n")
+            for read in bam.fetch(until_eof=True):
+                ref = read.reference_name
+                if ref not in refs:
+                    refs[ref] = [2147483648, 0]
 
-        sys.stderr.write(
-            "Reading the whole bam because no region or bed argument was made.\n"
-        )
-        for read in bam.fetch(until_eof=True):
-            ref = read.reference_name
-            if ref not in refs:
-                refs[ref] = [2147483648, 0]
-
-            start = read.reference_start
-            end = read.reference_end
-            if refs[ref][0] > start:
-                refs[ref][0] = start
-            if refs[ref][1] < end:
-                refs[ref][1] = end
+                start = read.reference_start
+                end = read.reference_end
+                if refs[ref][0] > start:
+                    refs[ref][0] = start
+                if refs[ref][1] < end:
+                    refs[ref][1] = end
 
         for contig in refs:
             yield (contig, refs[contig][0], refs[contig][1])
 
 
-def read_ignored_regions(bed_file: TextIO) -> Generator[Region, None, None]:
-    for i, line in enumerate(read_bed_file(bed_file)):
+def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
+    for line in read_bed_file(bed_file):
         ctg, start, end, other = line
         try:
-            mode = RegionMode(other[0])
+            desc = other[0]
         except IndexError:
-            sys.stderr.write(
-                f"Line {i} ({line}) in {bed_file.name} doesn't have a mode. Skipping."
-            )
+            desc = None
+        try:
+            actions_str = other[1]
+            # Split actions column.
+            # TODO: Or use multi-cols?
+            for action_str in actions_str.split(","):
+                action_opt, _, action_desc = action_str.partition(":")
+                action_opt = ActionOpt(action_opt)
+                if action_opt == ActionOpt.IGNORE:
+                    action_desc = IgnoreOpt(action_desc)
+                elif action_opt == ActionOpt.PLOT:
+                    action_desc = action_desc
+                else:
+                    action_desc = None
+
+                yield Region(
+                    name=ctg,
+                    region=pt.open(start, end),
+                    desc=desc,
+                    action=Action(action_opt, action_desc),
+                )
+        except IndexError:
             continue
 
-        yield Region(name=ctg, region=pt.open(start, end), mode=mode)
+
+def read_ignored_regions(infile: TextIO) -> DefaultDict[str, set[Region]]:
+    ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
+    for region in read_regions(infile):
+        ignored_regions[region.name].add(region)
+
+    return ignored_regions
+
+
+def read_overlay_regions(
+    infiles: Iterable[TextIO],
+    *,
+    ignored_regions: DefaultDict[str, set[Region]] | None = None,
+) -> DefaultDict[str, DefaultDict[int, set[Region]]]:
+    """
+    Read input overlay BED files and optionally updated ignored regions if any are specified.
+    """
+    overlay_regions: DefaultDict[str, DefaultDict[int, set[Region]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
+    for i, bed in enumerate(infiles):
+        for region in read_regions(bed):
+            # Add region to ignored regions.
+            if (
+                isinstance(ignored_regions, defaultdict)
+                and region.action
+                and (region.action.opt == ActionOpt.IGNORE)
+            ):
+                ignored_regions[region.name].add(region)
+            else:
+                overlay_regions[region.name][i].add(region)
+
+    return overlay_regions
