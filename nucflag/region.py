@@ -40,6 +40,7 @@ def update_relative_ignored_regions(
             region.action and region.action.desc != IgnoreOpt.RELATIVE
         ):
             yield region
+            continue
 
         if region.region.lower > region.region.upper:
             raise ValueError(

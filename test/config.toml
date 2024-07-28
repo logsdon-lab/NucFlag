@@ -19,10 +19,17 @@ thr_valley_height_std_below = 3
 
 # Valleys with coverage below this threshold are considered misjoins.
 # If float:
-# * ex. 0.1 => Valley where median is less than or equal to 10% of mean
+# * ex. 0.1 => Valley where minimum is less than or equal to 10% of mean
 # If int:
-# * ex. 2 => Valleys with median below 2
+# * ex. 2 => Valleys with minimum below 2
 thr_misjoin_valley = 0.1
+
+# Peaks with coverage above this threshold are considered collapses w/no variants.
+# If float:
+# * ex. 3.0 => Peaks where minimum is greater than or equal to 300% of mean
+# If int:
+# * ex. 40 => Peaks with minimum above 40
+thr_collapse_peak = 2.0
 
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.

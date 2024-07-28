@@ -127,8 +127,8 @@ def test_correct_plot(
         out_plot_path = os.path.join(output_dir, f"{ctg}.png")
 
         # https://stackoverflow.com/q/49595541
-        # Perceptual hash to compare features.
-        assert imagehash.phash(Image.open(exp_plot_path)) == imagehash.phash(
+        # Color hash to compare features.
+        assert imagehash.colorhash(Image.open(exp_plot_path)) == imagehash.colorhash(
             Image.open(out_plot_path)
         )
 

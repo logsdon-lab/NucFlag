@@ -78,18 +78,47 @@ def classify_misassemblies(
     config: dict[str, Any],
     ignored_regions: list[Region],
 ) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
+    # Filter ignored regions.
+    exprs_ignored_region_positions: list[pl.Expr] = [
+        ~(
+            (pl.col("position") >= r.region.lower)
+            & (pl.col("position") <= r.region.upper)
+        )
+        for r in ignored_regions
+        if r.region
+    ]
+
     # Calculate std and mean for both most and second most freq read.
-    # Remove gaps which would artificially lower mean.
-    df_gapless = df_cov.filter(pl.col("first") != 0)
-    mean_first, stdev_first = df_gapless["first"].mean(), df_gapless["first"].std()
-    mean_second, stdev_second = df_gapless["second"].mean(), df_gapless["second"].std()
-    del df_gapless
+    # Remove ignored regions and gaps in coverage which would affect mean.
+    df_summary = (
+        df_cov.lazy()
+        .filter(pl.col("first") != 0)
+        .filter(
+            exprs_ignored_region_positions if exprs_ignored_region_positions else True
+        )
+        .select("first", "second")
+        .describe()
+    )
+
+    mean_first, mean_second = (
+        df_summary.filter(pl.col("statistic") == "mean")
+        .select("first", "second")
+        .row(0)
+    )
+    stdev_first, stdev_second = (
+        df_summary.filter(pl.col("statistic") == "std").select("first", "second").row(0)
+    )
 
     # Calculate misjoin height threshold. Filters for some percent of the mean or static value.
     misjoin_height_thr = (
         mean_first * config["first"]["thr_misjoin_valley"]
         if isinstance(config["first"]["thr_misjoin_valley"], float)
         else config["first"]["thr_misjoin_valley"]
+    )
+    collapse_height_thr = (
+        mean_first * config["first"]["thr_collapse_peak"]
+        if isinstance(config["first"]["thr_collapse_peak"], float)
+        else config["first"]["thr_collapse_peak"]
     )
 
     first_peak_height_thr = mean_first + (
@@ -148,6 +177,8 @@ def classify_misassemblies(
         local_max_collapse_first = (
             df_cov.filter(filter_interval_expr(peak)).max().get_column("first")[0]
         )
+        includes_het = False
+
         for second_outlier in second_outliers_coords:
             # If local max of suspected collapsed region is greater than thr, is a collapse.
             if local_max_collapse_first < first_peak_height_thr:
@@ -156,8 +187,10 @@ def classify_misassemblies(
             if peak.overlaps(second_outlier):
                 misassemblies[Misassembly.COLLAPSE_VAR].add(peak.union(second_outlier))
                 classified_second_outliers.add(second_outlier)
-            else:
-                misassemblies[Misassembly.COLLAPSE].add(peak)
+                includes_het = True
+
+        if local_max_collapse_first >= collapse_height_thr and not includes_het:
+            misassemblies[Misassembly.COLLAPSE].add(peak)
 
     # Classify gaps.
     df_gaps = df_cov.filter(pl.col("first") == 0)
@@ -178,18 +211,18 @@ def classify_misassemblies(
 
     # Classify misjoins.
     for valley in first_valley_coords:
-        extended_valleys: set[pt.Interval] = set()
+        includes_het = False
         for second_outlier in second_outliers_coords:
             if valley.overlaps(second_outlier):
                 # Merge intervals.
                 misassemblies[Misassembly.MISJOIN].add(valley.union(second_outlier))
-                extended_valleys.add(valley)
+                includes_het = True
                 classified_second_outliers.add(second_outlier)
 
         # Otherwise, check if valley's median falls below threshold.
         # This means that while no overlapping secondary reads, low coverage means likely elsewhere.
         # Treat as a misjoin.
-        if valley not in extended_valleys:
+        if not includes_het:
             # Filter first to get general region.
             df_valley = df_cov.filter(filter_interval_expr(valley)).filter(
                 pl.col("first") <= misjoin_height_thr
@@ -216,7 +249,7 @@ def classify_misassemblies(
             ):
                 misassemblies[Misassembly.MISJOIN].add(valley)
 
-    # Check remaining secondary regions not categorized.
+    # Assign heterozygous site for remaining secondary regions not categorized.
     for second_outlier in second_outliers_coords:
         if second_outlier in classified_second_outliers:
             continue
@@ -275,11 +308,17 @@ def classify_plot_assembly(
                 "position": np.arange(start, end),
                 "first": cov_first_second[0],
                 "second": cov_first_second[1],
-            }
+            },
+            schema={"position": pl.Int64, "first": pl.Int16, "second": pl.Int16},
         )
         del cov_first_second
     except ValueError:
-        df = pl.read_csv(infile, separator="\t", has_header=True)
+        df = pl.read_csv(
+            infile,
+            separator="\t",
+            has_header=True,
+            dtypes={"position": pl.Int64, "first": pl.Int16, "second": pl.Int16},
+        )
 
     # Update ignored regions if relative.
     updated_ignored_regions = list(
