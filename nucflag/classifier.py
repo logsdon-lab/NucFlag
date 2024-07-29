@@ -88,6 +88,12 @@ def classify_misassemblies(
         if r.region
     ]
 
+    if df_cov.filter(pl.col("first") != 0).is_empty():
+        return (
+            df_cov.with_columns(status=pl.lit(Misassembly.GAP)),
+            {Misassembly.GAP: {pt.open(df_cov["position"][0], df_cov["position"][-1])}},
+        )
+
     # Calculate std and mean for both most and second most freq read.
     # Remove ignored regions and gaps in coverage which would affect mean.
     df_summary = (
