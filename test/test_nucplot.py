@@ -44,6 +44,13 @@ from PIL import Image
             "test/misjoin/expected_perc.bed",
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
+        # No reads covering region.
+        (
+            "test/all_gap/cov.tsv.gz",
+            "test/all_gap/region.bed",
+            "test/all_gap/expected.bed",
+            tuple(),
+        ),
     ],
 )
 def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple[str]):
