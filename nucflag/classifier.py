@@ -307,8 +307,9 @@ def classify_plot_assembly(
     try:
         bam = pysam.AlignmentFile(infile, threads=threads)
         cov_first_second = np.flip(
-            np.sort(get_coverage_by_base(bam, contig, start, end), axis=1)
-        ).transpose()
+            np.sort(get_coverage_by_base(bam, contig, start, end), axis=1).transpose(),
+            axis=0,
+        )
         df = pl.DataFrame(
             {
                 "position": np.arange(start, end),
