@@ -13,6 +13,16 @@ from .misassembly import Misassembly
 from .region import ActionOpt, Region
 
 
+# No margins.
+plt.rcParams["axes.xmargin"] = 0
+
+
+def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+    ax.set_frame_on(False)
+
+
 def plot_coverage(
     df: pl.DataFrame,
     misassemblies: dict[Misassembly, set[pt.Interval]],
@@ -21,11 +31,18 @@ def plot_coverage(
 ) -> tuple[plt.Figure, Any]:
     region_bounds = pt.open(df["position"].min(), df["position"].max())
 
+    subplot_handles = []
+    subplot_labels = []
+
+    number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
     if overlay_regions:
-        number_of_overlap_beds = len(overlay_regions.keys())
         fig, axs = plt.subplots(
-            # nrows (1 for the coverage plot.)
-            1 + len(overlay_regions.keys()),
+            # | ---------- |
+            # | \/\__/\||/ |
+            # | cov_legend |
+            # | bed_legend |
+            # nrows (n for bed, 1 for the coverage plot, 1 for coverage plot legend, and n for bed legends)
+            len(overlay_regions.keys()) + 1 + 1 + len(overlay_regions.keys()),
             # ncols
             1,
             figsize=(
@@ -34,8 +51,14 @@ def plot_coverage(
             ),
             sharex=True,
             gridspec_kw={
-                "height_ratios": [*[0.5 for _ in range(number_of_overlap_beds)], 3]
+                "height_ratios": [
+                    *[0.5 for _ in range(number_of_overlap_beds)],
+                    3,
+                    0.2,
+                    *[0.3 for _ in range(number_of_overlap_beds)],
+                ]
             },
+            layout="constrained",
         )
         plt.subplots_adjust(hspace=0.6)
 
@@ -45,9 +68,7 @@ def plot_coverage(
         for i, regions in overlay_regions.items():
             # Make axis as minimal as possible.
             bed_axs: matplotlib.axes.Axes = axs[i]
-            bed_axs.get_xaxis().set_visible(False)
-            bed_axs.get_yaxis().set_visible(False)
-            bed_axs.set_frame_on(False)
+            minimalize_ax(bed_axs)
 
             # Map uniq types to new color if none given.
             uniq_types = sorted({r.desc for r in regions if r.desc})
@@ -80,7 +101,7 @@ def plot_coverage(
                     raise ValueError(f"Region {row} has no description.")
 
                 rect = ptch.Rectangle(
-                    (row.region.lower, 0.7),
+                    (row.region.lower, 0),
                     width,
                     0.5,
                     linewidth=1,
@@ -91,22 +112,17 @@ def plot_coverage(
                 )
                 bed_axs.add_patch(rect)
 
-            # Add legend.
+            # Get legend elements.
             handles, labels = bed_axs.get_legend_handles_labels()
             labels, ids = np.unique(labels, return_index=True)
             handles = [handles[i] for i in ids]
-            bed_axs.legend(
-                handles,
-                labels,
-                loc="lower center",
-                borderaxespad=0,
-                ncols=len(handles) // 2,
-                fancybox=True,
-                fontsize=12,
-            )
+            subplot_handles.append(handles)
+            subplot_labels.append(labels)
     else:
-        fig, axs = plt.subplots(figsize=(PLOT_WIDTH, PLOT_HEIGHT))
-        ax = axs
+        fig, axs = plt.subplots(
+            2, 1, figsize=(PLOT_WIDTH, PLOT_HEIGHT), layout="constrained"
+        )
+        ax = axs[0]
 
     (_,) = ax.plot(
         df["position"],
@@ -138,20 +154,36 @@ def plot_coverage(
                 label=misasm,
             )
 
-    # Add legend. Deduplicate multiple labels.
+    # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073
     handles, labels = ax.get_legend_handles_labels()
     labels, ids = np.unique(labels, return_index=True)
     handles = [handles[i] for i in ids]
-    ax.legend(
+    legend_cov_ax: matplotlib.axes.Axes = axs[number_of_overlap_beds + 1]
+    minimalize_ax(legend_cov_ax)
+    legend_cov_ax.legend(
         handles,
         labels,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.2),
+        loc="center",
         ncols=len(labels),
         borderaxespad=0,
         fancybox=True,
     )
+    # Add legends for each overlapped bedfile.
+    for i, (sp_handles, sp_labels) in enumerate(zip(subplot_handles, subplot_labels)):
+        # Remove plot elements from legend ax.
+        # Offset by 2 for coverage plot and its legend.
+        legend_ax: matplotlib.axes.Axes = axs[i + number_of_overlap_beds + 2]
+        minimalize_ax(legend_ax)
+
+        legend_ax.legend(
+            sp_handles,
+            sp_labels,
+            loc="center",
+            ncols=len(sp_handles) // 3,
+            borderaxespad=0,
+            fancybox=True,
+        )
 
     maxval = df["position"].max()
     minval = df["position"].min()
@@ -182,6 +214,5 @@ def plot_coverage(
     # Only show ticks on the left and bottom spines
     ax.yaxis.set_ticks_position("left")
     ax.xaxis.set_ticks_position("bottom")
-    fig.tight_layout()
 
     return fig, axs

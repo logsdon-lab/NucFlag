@@ -344,8 +344,7 @@ def classify_plot_assembly(
         sys.stderr.write(f"Plotting {contig_name}.\n")
 
         output_plot = os.path.join(output_dir, f"{contig_name}.png")
-        plt.tight_layout()
-        plt.savefig(output_plot, dpi=PLOT_DPI)
+        plt.savefig(output_plot, dpi=PLOT_DPI, bbox_inches="tight")
 
     if output_cov_dir:
         sys.stderr.write(f"Writing coverage bed file for {contig_name}.\n")
