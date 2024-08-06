@@ -5,3 +5,4 @@ test/overlay/NA20847_rc-chr3_haplotype2-0000105:89881870-96384969.bed.gz filter=
 test/overlay/repeatmasker.bed filter=lfs diff=lfs merge=lfs -text
 test/overlay/repeatmasker_ignore.bed filter=lfs diff=lfs merge=lfs -text
 test/all_gap/cov.tsv.gz filter=lfs diff=lfs merge=lfs -text
+test/overlay/AG16778_chr4_contig-0003083:3247326-8431235.bed.gz filter=lfs diff=lfs merge=lfs -text

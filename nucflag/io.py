@@ -59,7 +59,7 @@ def read_asm_regions(
 
 
 def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
-    for line in read_bed_file(bed_file):
+    for i, line in enumerate(read_bed_file(bed_file)):
         ctg, start, end, other = line
         try:
             desc = other[0]
@@ -68,10 +68,17 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
         try:
             actions_str = other[1]
             # Split actions column.
-            # TODO: Or use multi-cols?
             for action_str in actions_str.split(","):
+                action_desc: IgnoreOpt | str | None
                 action_opt, _, action_desc = action_str.partition(":")
-                action_opt = ActionOpt(action_opt)
+                try:
+                    action_opt = ActionOpt(action_opt)
+                except ValueError:
+                    sys.stderr.write(
+                        f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}.\n"
+                    )
+                    action_opt = ActionOpt.NOOP
+
                 if action_opt == ActionOpt.IGNORE:
                     action_desc = IgnoreOpt(action_desc)
                 elif action_opt == ActionOpt.PLOT:
@@ -92,7 +99,8 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
 def read_ignored_regions(infile: TextIO) -> DefaultDict[str, set[Region]]:
     ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
     for region in read_regions(infile):
-        ignored_regions[region.name].add(region)
+        if region.action and region.action.opt == ActionOpt.IGNORE:
+            ignored_regions[region.name].add(region)
 
     return ignored_regions
 

@@ -101,6 +101,21 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
                 ]
             ),
         ),
+        # Misassembly overlaps partially with normal region.
+        (
+            "test/overlay/AG16778_chr4_contig-0003083:3247326-8431235.bed.gz",
+            "test/overlay/region_overlap_partial.bed",
+            "test/overlay/expected/overlap_partial/",
+            "test/overlay/overlap_partial/",
+            tuple(
+                [
+                    "-c",
+                    "test/config.toml",
+                    "--ignore_regions",
+                    "test/overlay/repeatmasker_overlap_partial.bed",
+                ]
+            ),
+        ),
     ],
 )
 def test_correct_plot(
@@ -109,7 +124,7 @@ def test_correct_plot(
     contigs = []
     with open(bed, "rt") as fh:
         for line in fh.readlines():
-            name, start, stop = line.strip().split("\t")
+            name, start, stop, *_ = line.strip().split("\t")
             contigs.append(f"{name}:{start}-{stop}")
 
     _ = subprocess.run(

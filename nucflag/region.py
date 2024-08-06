@@ -1,5 +1,5 @@
 from enum import StrEnum, auto
-from typing import Any, Generator, Iterable, NamedTuple
+from typing import Generator, Iterable, NamedTuple
 
 import numpy as np
 import portion as pt
@@ -18,11 +18,12 @@ class IgnoreOpt(StrEnum):
 class ActionOpt(StrEnum):
     IGNORE = auto()
     PLOT = auto()
+    NOOP = auto()
 
 
 class Action(NamedTuple):
     opt: ActionOpt
-    desc: Any | None
+    desc: IgnoreOpt | str | None
 
 
 class Region(NamedTuple):
