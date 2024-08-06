@@ -83,7 +83,6 @@ def plot_coverage(
                     ),
                 )
             )
-
             for row in regions:
                 # Skip rows not within bounds of df.
                 if not region_bounds.overlaps(row.region):
@@ -120,7 +119,11 @@ def plot_coverage(
             subplot_labels.append(labels)
     else:
         fig, axs = plt.subplots(
-            2, 1, figsize=(PLOT_WIDTH, PLOT_HEIGHT), layout="constrained"
+            2,
+            1,
+            figsize=(PLOT_WIDTH, PLOT_HEIGHT),
+            layout="constrained",
+            gridspec_kw={"height_ratios": [3, 0.2]},
         )
         ax = axs[0]
 

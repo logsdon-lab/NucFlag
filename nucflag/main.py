@@ -70,7 +70,7 @@ def parse_args() -> argparse.Namespace:
         "--output_status",
         default=None,
         type=argparse.FileType("wt"),
-        help="Bed file with status of contigs. With format: contig\tstart\tend\tmisassembled|good",
+        help="Bed file with status of contigs. With format: contig,start,end,misassembled|good",
     )
     parser.add_argument(
         "-t", "--threads", default=4, type=int, help="Threads for reading bam file."
@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
         "--ignore_regions",
         default=None,
         type=argparse.FileType("rt"),
-        help="Bed file with regions to ignore. With format: contig|all\tstart\tend\tabsolute|relative",
+        help="Bed file with regions to ignore. With format: contig|all,start,end,label,ignore:absolute|relative",
     )
     parser.add_argument(
         "--overlay_regions",

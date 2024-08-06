@@ -12,7 +12,7 @@ import portion as pt
 import pysam
 import scipy.signal
 
-from .constants import PLOT_DPI
+from .constants import PLOT_DPI, PROP_INCLUDE
 from .io import get_coverage_by_base
 from .misassembly import Misassembly
 from .plot import plot_coverage
@@ -88,20 +88,19 @@ def classify_misassemblies(
         if r.region
     ]
 
-    if df_cov.filter(pl.col("first") != 0).is_empty():
-        return (
-            df_cov.with_columns(status=pl.lit(Misassembly.GAP)),
-            {Misassembly.GAP: {pt.open(df_cov["position"][0], df_cov["position"][-1])}},
+    df_cov = df_cov.with_columns(
+        include=pl.when(
+            exprs_ignored_region_positions if exprs_ignored_region_positions else True
         )
+        .then(True)
+        .otherwise(False)
+    )
 
     # Calculate std and mean for both most and second most freq read.
     # Remove ignored regions and gaps in coverage which would affect mean.
     df_summary = (
         df_cov.lazy()
-        .filter(pl.col("first") != 0)
-        .filter(
-            exprs_ignored_region_positions if exprs_ignored_region_positions else True
-        )
+        .filter((pl.col("first") != 0) & pl.col("include"))
         .select("first", "second")
         .describe()
     )
@@ -114,6 +113,15 @@ def classify_misassemblies(
     stdev_first, stdev_second = (
         df_summary.filter(pl.col("statistic") == "std").select("first", "second").row(0)
     )
+
+    if any(
+        metric is None
+        for metric in (mean_first, mean_second, stdev_first, stdev_second)
+    ):
+        return (
+            df_cov.with_columns(status=pl.lit(Misassembly.GAP)),
+            {Misassembly.GAP: {pt.open(df_cov["position"][0], df_cov["position"][-1])}},
+        )
 
     # Calculate misjoin height threshold. Filters for some percent of the mean or static value.
     misjoin_height_thr = (
@@ -269,17 +277,35 @@ def classify_misassemblies(
     for mtype, regions in misassemblies.items():
         remove_regions = set()
         for region in regions:
+            region_len = region.upper - region.lower
+            expr_filter_region = filter_interval_expr(region)
             # Remove ignored regions.
             # TODO: This still could be better. O(n). Would need to rewrite and use an interval tree.
             if any(
                 ignored_region.region.overlaps(region)
                 for ignored_region in ignored_regions
             ):
+                df_include = (
+                    df_cov.filter(expr_filter_region)
+                    .get_column("include")
+                    .value_counts()
+                )
+                try:
+                    include_rows = df_include.filter(pl.col("include")).get_column(
+                        "count"
+                    )[0]
+                except IndexError:
+                    include_rows = 0
+                prop_include = include_rows / region_len
+                # Include misassemblies that overlap with greater than 50% non-ignored region.
+                if prop_include > PROP_INCLUDE:
+                    continue
+
                 remove_regions.add(region)
                 continue
 
             lf = lf.with_columns(
-                status=pl.when(filter_interval_expr(region))
+                status=pl.when(expr_filter_region)
                 .then(pl.lit(mtype))
                 .otherwise(pl.col("status"))
             )
