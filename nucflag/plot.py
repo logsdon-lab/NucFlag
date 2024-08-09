@@ -183,7 +183,8 @@ def plot_coverage(
             sp_handles,
             sp_labels,
             loc="center",
-            ncols=len(sp_handles) // 3,
+            # Must have at least one col.
+            ncols=max(len(sp_handles) // 3, 1),
             borderaxespad=0,
             fancybox=True,
         )
