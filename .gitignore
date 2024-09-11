@@ -8,3 +8,4 @@ dist/
 venv/
 .snakemake
 *.egg-info
+.nucflag

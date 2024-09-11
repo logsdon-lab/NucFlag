@@ -227,7 +227,9 @@ def classify_misassemblies(
     for valley in first_valley_coords:
         includes_het = False
         for second_outlier in second_outliers_coords:
-            if valley.overlaps(second_outlier):
+            if valley.overlaps(second_outlier) and not any(
+                g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
+            ):
                 # Merge intervals.
                 misassemblies[Misassembly.MISJOIN].add(valley.union(second_outlier))
                 includes_het = True
@@ -241,11 +243,11 @@ def classify_misassemblies(
             df_valley = df_cov.filter(filter_interval_expr(valley)).filter(
                 pl.col("first") <= misjoin_height_thr
             )
-            # Skip if fewer than 2 points found.
+            # Skip if fewer than n points found.
             if df_valley.shape[0] < config["first"]["thr_min_valley_width"]:
                 continue
 
-            # Get bounds of region and calculate median.
+            # Get bounds of region and find min.
             # Avoid flagging if intersects gap region.
             df_valley = (
                 df_valley
@@ -363,6 +365,7 @@ def classify_plot_assembly(
         config=config,
         ignored_regions=updated_ignored_regions,
     )
+    del df
 
     if output_dir:
         _ = plot_coverage(df_group_labeled, misassemblies, contig, overlay_regions)
@@ -385,12 +388,14 @@ def classify_plot_assembly(
 
         os.remove(output_bed)
 
-    df_misassemblies = pl.DataFrame(
+    del df_group_labeled
+
+    return pl.DataFrame(
         [
             (contig_name, interval.lower, interval.upper, misasm)
             for misasm, intervals in misassemblies.items()
             for interval in intervals
         ],
         schema=["contig", "start", "stop", "misassembly"],
+        orient="row",
     )
-    return df_misassemblies

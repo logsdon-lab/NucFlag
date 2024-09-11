@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import argparse
 import io
-import multiprocessing as mp
 import os
 import pprint
 import sys
 import warnings
 from collections import defaultdict
 from typing import DefaultDict
+from concurrent.futures.process import ProcessPoolExecutor
 
 import matplotlib
 import polars as pl
@@ -15,9 +15,7 @@ import tomllib
 
 from .classifier import classify_plot_assembly
 from .config import DEF_CONFIG
-from .constants import (
-    PLOT_FONT_SIZE,
-)
+from .constants import PLOT_FONT_SIZE, WINDOW_SIZE
 from .io import (
     read_asm_regions,
     read_ignored_regions,
@@ -119,8 +117,14 @@ def main():
     sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
 
     # Read regions in bam or from input regions.
+    general_cfg: dict = config.get("general", {})
     regions = list(
-        read_asm_regions(args.infile, args.input_regions, threads=args.threads)
+        read_asm_regions(
+            args.infile,
+            args.input_regions,
+            threads=args.threads,
+            window_size=general_cfg.get("window_size", WINDOW_SIZE),
+        )
     )
     sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
 
@@ -162,57 +166,59 @@ def main():
     # Set text size
     matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 
-    # results = []
+    # res = []
     # for region in regions:
-    #     results.append(
-    #         classify_plot_assembly(
-    #             args.infile,
-    #             args.output_plot_dir,
-    #             args.output_cov_dir,
-    #             args.threads,
-    #             *region,
-    #             config,
-    #             overlay_regions.get(region[0]),
-    #             ignored_regions.get("all", set()).union(ignored_regions.get(region[0], set())),
-    #         )
-    #     )
+    #     res.append(classify_plot_assembly(
+    #         args.infile,
+    #         args.output_plot_dir,
+    #         args.output_cov_dir,
+    #         args.threads,
+    #         *region,
+    #         config,
+    #         overlay_regions.get(region[0]),
+    #         ignored_regions.get("all", set()).union(ignored_regions.get(region[0], set())),
+    #     ))
 
-    with mp.Pool(processes=args.processes) as pool:
-        results = pool.starmap(
+    # Use new process pool, which doesn't cause a memory leak.
+    # Also create new processes aggressively to clear resources.
+    # https://stackoverflow.com/a/61492363
+    with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
+        res = pool.map(
             classify_plot_assembly,
-            [
-                (
-                    args.infile,
-                    args.output_plot_dir,
-                    args.output_cov_dir,
-                    args.threads,
-                    *region,
-                    config,
-                    overlay_regions.get(region[0]),
-                    ignored_regions.get("all", set()).union(
-                        ignored_regions.get(region[0], set())
-                    ),
-                )
-                for region in regions
-            ],
+            *zip(
+                *[
+                    (
+                        args.infile,
+                        args.output_plot_dir,
+                        args.output_cov_dir,
+                        args.threads,
+                        *region,
+                        config,
+                        overlay_regions.get(region[0]),
+                        ignored_regions.get("all", set()).union(
+                            ignored_regions.get(region[0], set())
+                        ),
+                    )
+                    for region in regions
+                ]
+            ),
         )
 
+    df_misasm = pl.concat(res).with_columns(
+        contig=pl.when(bool(args.input_regions))
+        .then(pl.col("contig"))
+        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+    )
+
     # Save misassemblies to output bed
-    dfs_misasm = []
     region_status = []
-    for region_info, df_misasm in zip(regions, results):
-        if not df_misasm.is_empty():
-            region_status.append((*region_info, RegionStatus.MISASSEMBLED))
-            dfs_misasm.append(df_misasm)
+    for region, start, end in regions:
+        if not df_misasm.filter(pl.col("contig") == region).is_empty():
+            region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
         else:
-            region_status.append((*region_info, RegionStatus.GOOD))
+            region_status.append((region, start, end, RegionStatus.GOOD))
 
-    try:
-        df_all_misasm: pl.DataFrame = pl.concat(dfs_misasm)
-    except ValueError:
-        df_all_misasm = pl.DataFrame(schema=["contig", "start", "end"])
-
-    df_all_misasm.sort(by=["contig", "start"]).write_csv(
+    df_misasm.sort(by=["contig", "start"]).write_csv(
         file=args.output_misasm, include_header=False, separator="\t"
     )
 
