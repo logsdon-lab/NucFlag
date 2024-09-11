@@ -54,3 +54,7 @@ thr_min_group_size = 5
 
 [gaps]
 thr_max_allowed_gap_size = 1000
+
+[general]
+# Window size. Only applicable if no region bed file is provided.
+window_size = 5_000_000

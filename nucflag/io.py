@@ -7,6 +7,7 @@ import portion as pt
 import pysam
 
 from .region import Action, ActionOpt, IgnoreOpt, Region
+from .constants import WINDOW_SIZE
 
 
 def get_coverage_by_base(
@@ -30,7 +31,11 @@ def read_bed_file(
 
 
 def read_asm_regions(
-    bamfile: str, input_regions: TextIO | None, *, threads: int = 4
+    bamfile: str,
+    input_regions: TextIO | None,
+    *,
+    threads: int = 4,
+    window_size: int = WINDOW_SIZE,
 ) -> Generator[tuple[str, int, int], None, None]:
     if input_regions:
         sys.stderr.write(f"Reading in regions from {input_regions.name}.\n")
@@ -39,23 +44,18 @@ def read_asm_regions(
             (ctg, start, stop) for ctg, start, stop, *_ in read_bed_file(input_regions)
         )
     else:
-        refs = {}
         with pysam.AlignmentFile(bamfile, threads=threads) as bam:
-            sys.stderr.write(f"Reading entire {bam} because no bedfile was provided.\n")
-            for read in bam.fetch(until_eof=True):
-                ref = read.reference_name
-                if ref not in refs:
-                    refs[ref] = [2147483648, 0]
+            sys.stderr.write(
+                f"Reading entire {bam.filename} in {window_size:,} bp intervals because no bedfile was provided.\n"
+            )
+            for ref in bam.references:
+                ref_len = bam.get_reference_length(ref)
+                num, rem = divmod(ref_len, window_size)
+                for i in range(1, num + 1):
+                    yield (ref, (i - 1) * window_size, i * window_size)
 
-                start = read.reference_start
-                end = read.reference_end
-                if refs[ref][0] > start:
-                    refs[ref][0] = start
-                if refs[ref][1] < end:
-                    refs[ref][1] = end
-
-        for contig in refs:
-            yield (contig, refs[contig][0], refs[contig][1])
+                final_start = num * window_size
+                yield (ref, final_start, final_start + rem)
 
 
 def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
