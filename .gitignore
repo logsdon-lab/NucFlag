@@ -6,6 +6,7 @@ data/
 data
 dist/
 venv/
+exp/
 .snakemake
 *.egg-info
 .nucflag

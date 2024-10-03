@@ -8,6 +8,7 @@ class Misassembly(StrEnum):
     GAP = "GAP"
     FALSE_DUP = "FALSE_DUP"
     HET = "HET"
+    ERROR = "ERROR"
 
     def as_color(self) -> str:
         match self:
@@ -23,5 +24,7 @@ class Misassembly(StrEnum):
                 return "purple"
             case self.HET:
                 return "teal"
+            case self.ERROR:
+                return "red"
             case _:
                 raise ValueError(f"Invalid color {self}")

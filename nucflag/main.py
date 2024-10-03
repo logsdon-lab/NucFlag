@@ -204,7 +204,7 @@ def main():
             ),
         )
 
-    df_misasm = pl.concat(res).with_columns(
+    df_misasm = pl.concat(df for df in res if not df.is_empty()).with_columns(
         contig=pl.when(bool(args.input_regions))
         .then(pl.col("contig"))
         .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))

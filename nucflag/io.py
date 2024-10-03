@@ -3,8 +3,8 @@ from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
 import numpy as np
-import portion as pt
 import pysam
+from intervaltree import Interval
 
 from .region import Action, ActionOpt, IgnoreOpt, Region
 from .constants import WINDOW_SIZE
@@ -26,7 +26,7 @@ def read_bed_file(
     for line in bed_file.readlines():
         if line[0] == "#":
             continue
-        chrm, start, end, *other = line.strip().split()
+        chrm, start, end, *other = line.strip().split("\t")
         yield (chrm, int(start), int(end), other)
 
 
@@ -88,7 +88,7 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
 
                 yield Region(
                     name=ctg,
-                    region=pt.open(start, end),
+                    region=Interval(start, end),
                     desc=desc,
                     action=Action(action_opt, action_desc),
                 )

@@ -6,7 +6,7 @@ import matplotlib.patches as ptch
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
-import portion as pt
+from intervaltree import Interval, IntervalTree
 
 from .constants import PLOT_HEIGHT, PLOT_HEIGHT_SCALE_FACTOR, PLOT_WIDTH, PLOT_YLIM
 from .misassembly import Misassembly
@@ -25,11 +25,11 @@ def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
 
 def plot_coverage(
     df: pl.DataFrame,
-    misassemblies: dict[Misassembly, set[pt.Interval]],
+    misassemblies: dict[Misassembly, IntervalTree],
     contig_name: str,
     overlay_regions: DefaultDict[int, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
-    region_bounds = pt.open(df["position"].min(), df["position"].max())
+    region_bounds = Interval(df["position"].min(), df["position"].max())
 
     subplot_handles = []
     subplot_labels = []
@@ -90,7 +90,7 @@ def plot_coverage(
 
                 if not row.action or (row.action and row.action.opt != ActionOpt.PLOT):
                     continue
-                width = row.region.upper - row.region.lower
+                width = row.region.length()
                 # Use color provided. Default to random generated ones otherwise.
                 if row.action.desc:
                     color = row.action.desc
@@ -100,7 +100,7 @@ def plot_coverage(
                     raise ValueError(f"Region {row} has no description.")
 
                 rect = ptch.Rectangle(
-                    (row.region.lower, 0),
+                    (row.region.begin, 0),
                     width,
                     0.5,
                     linewidth=1,
@@ -148,10 +148,10 @@ def plot_coverage(
     # Add misassembly rect patches to highlight region.
     for misasm, misasm_regions in misassemblies.items():
         color = misasm.as_color()
-        for misasm_region in misasm_regions:
+        for misasm_region in misasm_regions.iter():
             ax.axvspan(
-                misasm_region.lower,
-                misasm_region.upper,
+                misasm_region.begin,
+                misasm_region.end,
                 color=color,
                 alpha=0.4,
                 label=misasm,

@@ -3,14 +3,14 @@ import os
 import shutil
 import sys
 from collections import defaultdict
-from typing import Any, DefaultDict
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
-import portion as pt
 import pysam
 import scipy.signal
+from intervaltree import Interval, IntervalTree
 
 from .constants import PLOT_DPI, PROP_INCLUDE
 from .io import get_coverage_by_base
@@ -20,47 +20,49 @@ from .region import Region, update_relative_ignored_regions
 
 
 def peak_finder(
-    data: np.ndarray,
-    positions: np.ndarray,
+    df: pl.DataFrame,
     *,
     height: int,
-    distance: int,
     width: int,
+    invert: bool = False,
     group_distance: int = 5_000,
-) -> list[pt.Interval]:
-    _, peak_info = scipy.signal.find_peaks(
-        data, height=height, distance=distance, width=width
+) -> IntervalTree:
+    # Including zeroes will alter the calculation of valley heights as will always be the max.
+    df_subset = df.filter(pl.col("first") != 0)
+    data = df_subset["first"] if not invert else -df_subset["first"]
+    positions = df_subset["position"]
+    # Use height as first threshold.
+    peaks, peak_info = scipy.signal.find_peaks(data, height=height, width=width)
+    # Calculate median avoiding peaks.
+    median_no_peaks = data.filter(~positions.is_in(peaks)).median()
+
+    # Create interval tree adjusted to group distance.
+    intervals = IntervalTree()
+    for left_idx, right_idx, peak_ht in zip(
+        peak_info["left_ips"], peak_info["right_ips"], peak_info["peak_heights"]
+    ):
+        left_idx, right_idx = int(left_idx), int(right_idx)
+        left_pos, right_pos = positions[left_idx], positions[right_idx]
+        # Calculate relative height
+        peak_rel_ht = peak_ht - median_no_peaks
+        intervals.add(
+            Interval(
+                left_pos - group_distance,
+                right_pos + group_distance,
+                peak_rel_ht,
+            )
+        )
+    # Merge taking largest height.
+    intervals.merge_overlaps(strict=False, data_reducer=lambda x, y: max(x, y))
+
+    return IntervalTree(
+        Interval(
+            interval.begin + group_distance,
+            interval.end - group_distance,
+            interval.data,
+        )
+        for interval in intervals.iter()
     )
-
-    # Peaks are passed in sorted order.
-    intervals: list[pt.Interval] = []
-    for left_pos, right_pos in zip(peak_info["left_ips"], peak_info["right_ips"]):
-        new_peak = pt.closed(positions[int(left_pos)], positions[int(right_pos)])
-        try:
-            prev_peak = intervals.pop()
-            if prev_peak == new_peak:
-                intervals.append(new_peak)
-                continue
-
-            intersection = prev_peak.intersection(new_peak)
-            dst_between = new_peak.lower - prev_peak.upper
-
-            # Merge peaks if there are any intersections.
-            if not intersection.empty:
-                new_peak = prev_peak.union(new_peak)
-                intervals.append(new_peak)
-            # Merge peaks if within a set distance.
-            elif dst_between < group_distance:
-                new_peak = pt.closed(prev_peak.lower, new_peak.upper)
-                intervals.append(new_peak)
-            else:
-                intervals.append(prev_peak)
-                intervals.append(new_peak)
-        # First peak.
-        except IndexError:
-            intervals.append(new_peak)
-
-    return intervals
 
 
 # https://stackoverflow.com/a/7353335
@@ -68,8 +70,23 @@ def consecutive(data, stepsize: int = 1):
     return np.split(data, np.where((np.diff(data) <= stepsize) == False)[0] + 1)  # noqa: E712
 
 
-def filter_interval_expr(interval: pt.Interval, *, col: str = "position") -> pl.Expr:
-    return (pl.col(col) >= interval.lower) & (pl.col(col) <= interval.upper)
+def filter_interval_expr(interval: Interval, *, col: str = "position") -> pl.Expr:
+    return pl.col(col).is_between(interval.begin, interval.end)
+
+
+def calculate_het_ratio(
+    df: pl.DataFrame, interval: Interval, second_thr: float
+) -> float:
+    df_het = df.filter(filter_interval_expr(interval)).filter(
+        pl.col("second") > second_thr
+    )
+    # Apply median filter with small window size to remove outliers while not oversmoothing.
+    first_signal: np.ndarray = scipy.signal.medfilt(df_het["first"], 3)
+    second_signal: np.ndarray = scipy.signal.medfilt(df_het["second"], 3)
+    # Use max to get general amplitude of data.
+    het_first_median = first_signal.max()
+    het_second_median = second_signal.max()
+    return het_second_median / (het_first_median + het_second_median)
 
 
 def classify_misassemblies(
@@ -77,15 +94,14 @@ def classify_misassemblies(
     *,
     config: dict[str, Any],
     ignored_regions: list[Region],
-) -> tuple[pl.DataFrame, dict[Misassembly, set[pt.Interval]]]:
+) -> tuple[pl.DataFrame, dict[Misassembly, IntervalTree]]:
+    ignored_regions_intervals = IntervalTree(
+        r.region for r in ignored_regions if r.region
+    )
     # Filter ignored regions.
     exprs_ignored_region_positions: list[pl.Expr] = [
-        ~(
-            (pl.col("position") >= r.region.lower)
-            & (pl.col("position") <= r.region.upper)
-        )
-        for r in ignored_regions
-        if r.region
+        ~pl.col("position").is_between(r.begin, r.end)
+        for r in ignored_regions_intervals.iter()
     ]
 
     df_cov = df_cov.with_columns(
@@ -120,173 +136,140 @@ def classify_misassemblies(
     ):
         return (
             df_cov.with_columns(status=pl.lit(Misassembly.GAP)),
-            {Misassembly.GAP: {pt.open(df_cov["position"][0], df_cov["position"][-1])}},
+            {
+                Misassembly.GAP: {
+                    Interval(df_cov["position"][0], df_cov["position"][-1])
+                }
+            },
         )
 
-    # Calculate misjoin height threshold. Filters for some percent of the mean or static value.
-    misjoin_height_thr = (
-        mean_first * config["first"]["thr_misjoin_valley"]
-        if isinstance(config["first"]["thr_misjoin_valley"], float)
-        else config["first"]["thr_misjoin_valley"]
-    )
-    collapse_height_thr = (
-        mean_first * config["first"]["thr_collapse_peak"]
-        if isinstance(config["first"]["thr_collapse_peak"], float)
-        else config["first"]["thr_collapse_peak"]
-    )
-
-    first_peak_height_thr = mean_first + (
-        config["first"]["thr_peak_height_std_above"] * stdev_first
-    )
-    first_valley_height_thr = mean_first - (
-        config["first"]["thr_valley_height_std_below"] * stdev_first
-    )
-
+    collapse_height_thr = round(mean_first * config["first"]["thr_collapse_peak"])
+    misjoin_height_thr = round(mean_first * config["first"]["thr_misjoin_valley"])
     first_peak_coords = peak_finder(
-        df_cov["first"],
-        df_cov["position"],
-        height=first_peak_height_thr,
-        distance=config["first"]["thr_min_peak_horizontal_distance"],
+        df_cov,
+        height=collapse_height_thr,
         width=config["first"]["thr_min_peak_width"],
         group_distance=config["first"]["peak_group_distance"],
     )
     first_valley_coords = peak_finder(
-        -df_cov["first"],
-        df_cov["position"],
-        # Account for when thr goes negative.
-        height=-(
-            misjoin_height_thr
-            if first_valley_height_thr < 0
-            else first_valley_height_thr
-        ),
-        distance=config["first"]["thr_min_valley_horizontal_distance"],
+        df_cov,
+        invert=True,
+        height=-mean_first,
         width=config["first"]["thr_min_valley_width"],
         group_distance=config["first"]["valley_group_distance"],
     )
 
     # Remove secondary rows that don't meet minimal secondary coverage.
-    second_thr = max(
-        round(mean_first * config["second"]["thr_min_perc_first"]),
-        round(
-            mean_second + (config["second"]["thr_peak_height_std_above"] * stdev_second)
-        ),
-    )
+    second_thr = round(mean_first * config["second"]["thr_min_perc_first"])
 
     classified_second_outliers = set()
     df_second_outliers = df_cov.filter(pl.col("second") > second_thr)
     # Group consecutive positions allowing a maximum gap of stepsize.
     # Larger stepsize groups more positions.
-    second_outliers_coords: list[pt.Interval] = []
+    second_outliers_coords: IntervalTree = IntervalTree()
     for grp in consecutive(
         df_second_outliers["position"], stepsize=config["second"]["group_distance"]
     ):
         if len(grp) < config["second"]["thr_min_group_size"]:
             continue
-        second_outliers_coords.append(pt.open(grp[0], grp[-1]))
+        second_outliers_coords.add(Interval(grp[0], grp[-1]))
 
-    misassemblies: dict[Misassembly, set[pt.Interval]] = {m: set() for m in Misassembly}
+    misassemblies: defaultdict[Misassembly, IntervalTree] = defaultdict(IntervalTree)
 
     # Intersect intervals and classify collapses.
-    for peak in first_peak_coords:
-        local_max_collapse_first = (
-            df_cov.filter(filter_interval_expr(peak)).max().get_column("first")[0]
-        )
-        includes_het = False
+    for peak in first_peak_coords.iter():
+        # If height of suspected collapsed region is greater than thr, is a collapse.
+        if peak.data < collapse_height_thr:
+            continue
 
-        for second_outlier in second_outliers_coords:
-            # If local max of suspected collapsed region is greater than thr, is a collapse.
-            if local_max_collapse_first < first_peak_height_thr:
-                continue
+        overlaps: set[Interval] = second_outliers_coords.overlap(peak)
+        for overlap in overlaps:
+            new_overlap_interval = Interval(
+                min(peak.begin, overlap.begin), max(peak.end, overlap.end)
+            )
+            misassemblies[Misassembly.COLLAPSE_VAR].add(new_overlap_interval)
+            classified_second_outliers.add(overlap)
 
-            if peak.overlaps(second_outlier):
-                misassemblies[Misassembly.COLLAPSE_VAR].add(peak.union(second_outlier))
-                classified_second_outliers.add(second_outlier)
-                includes_het = True
-
-        if local_max_collapse_first >= collapse_height_thr and not includes_het:
+        if not overlaps:
             misassemblies[Misassembly.COLLAPSE].add(peak)
 
     # Classify gaps.
     df_gaps = df_cov.filter(pl.col("first") == 0)
-    gaps = set()
     for grp in consecutive(df_gaps["position"], stepsize=1):
-        if len(grp) < 2:
+        if grp.size == 0:
             continue
-
-        gap_len = grp[-1] - grp[0]
+        # In case of 1 len interval
+        if grp[0] == grp[-1]:
+            gap_len = 1
+            gap = Interval(grp[0], grp[0] + 1)
+        else:
+            gap_len = grp[-1] - grp[0]
+            gap = Interval(grp[0], grp[-1])
 
         if gap_len < config["gaps"]["thr_max_allowed_gap_size"]:
             continue
 
-        gap = pt.open(grp[0], grp[-1])
-        gaps.add(gap)
-
-    misassemblies[Misassembly.GAP] = gaps
+        misassemblies[Misassembly.GAP].add(gap)
 
     # Classify misjoins.
     for valley in first_valley_coords:
-        includes_het = False
-        for second_outlier in second_outliers_coords:
-            if valley.overlaps(second_outlier) and not any(
-                g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
-            ):
-                # Merge intervals.
-                misassemblies[Misassembly.MISJOIN].add(valley.union(second_outlier))
-                includes_het = True
-                classified_second_outliers.add(second_outlier)
+        second_overlaps = second_outliers_coords.overlap(valley)
+        overlaps_gap = misassemblies[Misassembly.GAP].overlaps(valley)
+        overlaps_collapse = misassemblies[Misassembly.COLLAPSE].overlaps(
+            valley
+        ) or misassemblies[Misassembly.COLLAPSE_VAR].overlaps(valley)
 
-        # Otherwise, check if valley's median falls below threshold.
-        # This means that while no overlapping secondary reads, low coverage means likely elsewhere.
-        # Treat as a misjoin.
-        if not includes_het:
-            # Filter first to get general region.
-            df_valley = df_cov.filter(filter_interval_expr(valley)).filter(
-                pl.col("first") <= misjoin_height_thr
-            )
-            # Skip if fewer than n points found.
-            if df_valley.shape[0] < config["first"]["thr_min_valley_width"]:
-                continue
+        # Ignore if overlaps existing gap, collapse, or collapse with variant.
+        if overlaps_gap or overlaps_collapse:
+            continue
 
-            # Get bounds of region and find min.
-            # Avoid flagging if intersects gap region.
-            df_valley = (
-                df_valley
-                if df_valley.shape[0] == 1
-                else df_cov.filter(
-                    filter_interval_expr(
-                        pt.open(
-                            df_valley["position"].min(), df_valley["position"].max()
-                        )
-                    )
-                )
+        # Calculate relative height of valley.
+        # And only take those that meet criteria.
+        valley_below_thr = valley.data > misjoin_height_thr
+
+        for overlap in second_overlaps:
+            # Merge intervals.
+            new_overlap_interval = Interval(
+                min(valley.begin, overlap.begin), max(valley.end, overlap.end)
             )
-            if df_valley["first"].min() <= misjoin_height_thr and not any(
-                g.overlaps(valley) for g in misassemblies[Misassembly.GAP]
-            ):
-                misassemblies[Misassembly.MISJOIN].add(valley)
+            if valley_below_thr:
+                misassemblies[Misassembly.MISJOIN].add(new_overlap_interval)
+                classified_second_outliers.add(overlap)
+            else:
+                het_ratio = calculate_het_ratio(df_cov, overlap, second_thr)
+                if het_ratio >= config["second"]["thr_het_ratio"]:
+                    misassemblies[Misassembly.ERROR].add(new_overlap_interval)
+                    classified_second_outliers.add(overlap)
+
+        if not second_overlaps and valley_below_thr:
+            misassemblies[Misassembly.MISJOIN].add(valley)
 
     # Assign heterozygous site for remaining secondary regions not categorized.
     for second_outlier in second_outliers_coords:
         if second_outlier in classified_second_outliers:
             continue
 
-        misassemblies[Misassembly.HET].add(second_outlier)
+        het_ratio = calculate_het_ratio(df_cov, second_outlier, second_thr)
+
+        # If under het ratio, treat as het. Otherwise, some error.
+        if het_ratio >= config["second"]["thr_het_ratio"]:
+            misassemblies[Misassembly.ERROR].add(second_outlier)
+        else:
+            misassemblies[Misassembly.HET].add(second_outlier)
 
     # Annotate df with misassembly.
     lf = df_cov.lazy().with_columns(status=pl.lit("Good"))
-
-    filtered_misassemblies = defaultdict(set)
     for mtype, regions in misassemblies.items():
-        remove_regions = set()
-        for region in regions:
-            region_len = region.upper - region.lower
+        # Remove any overlapping regions.
+        regions.merge_overlaps(strict=False)
+
+        removed_regions = set()
+        for region in regions.iter():
+            region_len = region.begin - region.end
             expr_filter_region = filter_interval_expr(region)
+
             # Remove ignored regions.
-            # TODO: This still could be better. O(n). Would need to rewrite and use an interval tree.
-            if any(
-                ignored_region.region.overlaps(region)
-                for ignored_region in ignored_regions
-            ):
+            if ignored_regions_intervals.overlaps(region):
                 df_include = (
                     df_cov.filter(expr_filter_region)
                     .get_column("include")
@@ -298,23 +281,25 @@ def classify_misassemblies(
                     )[0]
                 except IndexError:
                     include_rows = 0
-                prop_include = include_rows / region_len
+
                 # Include misassemblies that overlap with greater than 50% non-ignored region.
+                prop_include = include_rows / region_len
                 if prop_include > PROP_INCLUDE:
-                    continue
+                    # And update its status.
+                    lf = lf.with_columns(
+                        status=pl.when(expr_filter_region)
+                        .then(pl.lit(mtype))
+                        .otherwise(pl.col("status"))
+                    )
+                else:
+                    # Otherwise, remove it.
+                    removed_regions.add(region)
 
-                remove_regions.add(region)
-                continue
-
-            lf = lf.with_columns(
-                status=pl.when(expr_filter_region)
-                .then(pl.lit(mtype))
-                .otherwise(pl.col("status"))
-            )
-        filtered_misassemblies[mtype] = regions - remove_regions
+        for rm_region in removed_regions:
+            regions.remove_overlap(rm_region.begin, rm_region.end)
 
     # TODO: false dupes
-    return lf.collect(), filtered_misassemblies
+    return lf.collect(), misassemblies
 
 
 def classify_plot_assembly(
@@ -326,7 +311,7 @@ def classify_plot_assembly(
     start: int,
     end: int,
     config: dict[str, Any],
-    overlay_regions: DefaultDict[int, set[Region]] | None,
+    overlay_regions: defaultdict[int, set[Region]] | None,
     ignored_regions: set[Region],
 ) -> pl.DataFrame:
     contig_name = f"{contig}:{start}-{end}"
@@ -392,7 +377,7 @@ def classify_plot_assembly(
 
     return pl.DataFrame(
         [
-            (contig_name, interval.lower, interval.upper, misasm)
+            (contig_name, interval.begin, interval.end, misasm)
             for misasm, intervals in misassemblies.items()
             for interval in intervals
         ],
