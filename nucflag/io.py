@@ -2,11 +2,14 @@ import sys
 from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
+import polars as pl
 import numpy as np
-import portion as pt
 import pysam
+from intervaltree import Interval
 
-from .region import Action, ActionOpt, IgnoreOpt, Region
+from .utils import check_bam_indexed
+from .misassembly import Misassembly
+from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
 from .constants import WINDOW_SIZE
 
 
@@ -26,12 +29,12 @@ def read_bed_file(
     for line in bed_file.readlines():
         if line[0] == "#":
             continue
-        chrm, start, end, *other = line.strip().split()
+        chrm, start, end, *other = line.strip().split("\t")
         yield (chrm, int(start), int(end), other)
 
 
 def read_asm_regions(
-    bamfile: str,
+    infile: str,
     input_regions: TextIO | None,
     *,
     threads: int = 4,
@@ -44,7 +47,13 @@ def read_asm_regions(
             (ctg, start, stop) for ctg, start, stop, *_ in read_bed_file(input_regions)
         )
     else:
-        with pysam.AlignmentFile(bamfile, threads=threads) as bam:
+        check_bam_indexed(infile)
+        if not infile.endswith(".bam"):
+            raise NotImplementedError(
+                "Reading regions from coverage file not supported."
+            )
+
+        with pysam.AlignmentFile(infile, threads=threads) as bam:
             sys.stderr.write(
                 f"Reading entire {bam.filename} in {window_size:,} bp intervals because no bedfile was provided.\n"
             )
@@ -88,7 +97,7 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
 
                 yield Region(
                     name=ctg,
-                    region=pt.open(start, end),
+                    region=Interval(start, end),
                     desc=desc,
                     action=Action(action_opt, action_desc),
                 )
@@ -129,3 +138,47 @@ def read_overlay_regions(
                 overlay_regions[region.name][i].add(region)
 
     return overlay_regions
+
+
+def write_misassemblies_and_status(
+    dfs_misasm: Iterable[pl.DataFrame],
+    regions: Iterable[tuple[str, int, int]],
+    output_misasm: TextIO,
+    output_status: TextIO | None,
+    *,
+    bed_provided: bool,
+):
+    try:
+        df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
+    except ValueError:
+        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
+
+    df_misasm = df_misasm.with_columns(
+        contig=pl.when(bed_provided)
+        .then(pl.col("contig"))
+        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+    )
+
+    df_misasm.sort(by=["contig", "start"]).write_csv(
+        file=output_misasm, include_header=False, separator="\t"
+    )
+
+    if output_status:
+        # Save misassemblies to output bed
+        region_status = []
+        # If only HETs, consider correctly assembled.
+        for region, start, end in regions:
+            df_misasm_ctg = df_misasm.filter(pl.col("contig") == region)
+            if df_misasm_ctg.filter(
+                pl.col("misassembly") != Misassembly.HET
+            ).is_empty():
+                region_status.append((region, start, end, RegionStatus.GOOD))
+            else:
+                region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
+
+        df_asm_status = pl.DataFrame(
+            region_status, schema=["contig", "start", "end", "status"]
+        )
+        df_asm_status.sort(by=["contig", "start"]).write_csv(
+            output_status, include_header=False, separator="\t"
+        )

@@ -2,7 +2,7 @@ from enum import StrEnum, auto
 from typing import Generator, Iterable, NamedTuple
 
 import numpy as np
-import portion as pt
+from intervaltree import Interval
 
 
 class RegionStatus(StrEnum):
@@ -28,7 +28,7 @@ class Action(NamedTuple):
 
 class Region(NamedTuple):
     name: str
-    region: pt.Interval
+    region: Interval
     desc: str | None
     action: Action | None
 
@@ -43,21 +43,21 @@ def update_relative_ignored_regions(
             yield region
             continue
 
-        if region.region.lower > region.region.upper:
+        if region.region.begin > region.region.end:
             raise ValueError(
                 f"Region lower bound cannot be larger than upper bound. ({region})"
             )
-        if region.region.lower < 0:
+        if region.region.begin < 0:
             rel_start = ctg_end
         else:
             rel_start = ctg_start
 
-        lower = rel_start + region.region.lower
-        upper = rel_start + region.region.upper
+        lower = rel_start + region.region.begin
+        upper = rel_start + region.region.end
 
         yield Region(
             region.name,
-            pt.open(max(lower, 0), np.clip(upper, 0, ctg_end)),
+            Interval(max(lower, 0), np.clip(upper, 0, ctg_end)),
             region.desc,
             region.action,
         )

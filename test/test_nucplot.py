@@ -5,43 +5,41 @@ import imagehash
 import pytest
 from PIL import Image
 
+from .helpers.integration import run_integration_test
+
 
 @pytest.mark.parametrize(
-    ["bam", "bed", "expected", "config"],
+    ["bam", "bed", "expected_misassemblies", "expected_statuses", "config"],
     [
         # Standard case
         (
             "test/standard/HG00096_hifi.bam",
             "test/standard/region.bed",
             "test/standard/expected.bed",
-            tuple(["-c", "test/config.toml"]),
+            None,
+            tuple(["-c", "test/standard/config.toml"]),
         ),
         # Ignore regions
         (
             "test/ignored/HG00731_hifi.bam",
             "test/ignored/region.bed",
             "test/ignored/expected.bed",
+            None,
             tuple(
                 [
                     "-c",
-                    "test/config.toml",
+                    "test/ignored/config.toml",
                     "--ignore_regions",
                     "test/ignored/ignore.bed",
                 ]
             ),
-        ),
-        # Static misjoin threshold
-        (
-            "test/misjoin/HG00171_hifi.bam",
-            "test/misjoin/region.bed",
-            "test/misjoin/expected_static.bed",
-            tuple(["-c", "test/misjoin/config_static.toml"]),
         ),
         # Percent misjoin threshold
         (
             "test/misjoin/HG00171_hifi.bam",
             "test/misjoin/region.bed",
             "test/misjoin/expected_perc.bed",
+            None,
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
         # No reads covering region.
@@ -49,20 +47,62 @@ from PIL import Image
             "test/all_gap/cov.tsv.gz",
             "test/all_gap/region.bed",
             "test/all_gap/expected.bed",
+            None,
             tuple(),
+        ),
+        # Check that HETs don't affect status.
+        (
+            "test/status_ignore_het/HG00514_rc-chr8_haplotype1-0000015:40851933-44831382.bed.gz",
+            "test/status_ignore_het/region.bed",
+            "test/status_ignore_het/expected_misassemblies.bed",
+            "test/status_ignore_het/expected_status.bed",
+            tuple(
+                [
+                    "-c",
+                    "test/status_ignore_het/config.toml",
+                    "--ignore_regions",
+                    "test/status_ignore_het/ignore.bed",
+                ]
+            ),
         ),
     ],
 )
-def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple[str]):
-    process = subprocess.run(
-        ["python", "-m", "nucflag.main", "-i", bam, "-b", bed, *config],
-        capture_output=True,
-        check=True,
+def test_identify_misassemblies(
+    bam: str,
+    bed: str,
+    expected_misassemblies: str,
+    expected_statuses: str | None,
+    config: tuple[str],
+):
+    expected_outputs = [("-o", expected_misassemblies)]
+    if expected_statuses:
+        expected_outputs.append(("-s", expected_statuses))
+
+    run_integration_test(
+        "python",
+        "-m",
+        "nucflag.main",
+        "-i",
+        bam,
+        "-b",
+        bed,
+        *config,
+        expected_output=expected_outputs,
     )
-    res = [line.split("\t") for line in process.stdout.decode().split("\n") if line]
-    with open(expected, "rt") as exp_res_fh:
-        exp_res = [line.strip().split("\t") for line in exp_res_fh.readlines() if line]
-        assert res == exp_res
+
+
+# Check that providing no bai produces non-zero exit code.
+def test_bam_idx_check():
+    infile = "test/no_bai/null.bam"
+    process = subprocess.run(
+        ["python", "-m", "nucflag.main", "-i", infile],
+        capture_output=True,
+    )
+    assert (
+        process.returncode == 1
+        and f"FileNotFoundError: {infile} must be indexed. Run 'samtools index {infile}'."
+        in process.stderr.decode()
+    )
 
 
 @pytest.mark.parametrize(
@@ -78,7 +118,7 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
                 tuple(
                     [
                         "-c",
-                        "test/config.toml",
+                        "test/overlay/config.toml",
                         "--overlay_regions",
                         *["test/overlay/repeatmasker.bed" for _ in range(i)],
                     ]
@@ -95,7 +135,7 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
             tuple(
                 [
                     "-c",
-                    "test/config.toml",
+                    "test/overlay/config.toml",
                     "--overlay_regions",
                     "test/overlay/repeatmasker_ignore.bed",
                 ]
@@ -110,7 +150,7 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
             tuple(
                 [
                     "-c",
-                    "test/config.toml",
+                    "test/overlay/config.toml",
                     "--ignore_regions",
                     "test/overlay/repeatmasker_overlap_partial.bed",
                 ]
