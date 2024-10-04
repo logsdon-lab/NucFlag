@@ -16,6 +16,7 @@ from .het import identify_hets
 from .collapse import identify_collapses
 from .misjoin import identify_misjoins
 from .common import peak_finder, consecutive, filter_interval_expr
+from ..utils import check_bam_indexed
 from ..constants import PLOT_DPI, PROP_INCLUDE
 from ..io import get_coverage_by_base
 from ..misassembly import Misassembly
@@ -227,6 +228,8 @@ def classify_plot_assembly(
     contig_name = f"{contig}:{start}-{end}"
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
 
+    # Check bamfile is indexed to prevent silent failure to read alignment file.
+    check_bam_indexed(infile)
     try:
         bam = pysam.AlignmentFile(infile, threads=threads)
         cov_first_second = np.flip(

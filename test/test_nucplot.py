@@ -58,6 +58,20 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
         assert res == exp_res
 
 
+# Check that providing no bai produces non-zero exit code.
+def test_bam_idx_check():
+    infile = "test/no_bai/null.bam"
+    process = subprocess.run(
+        ["python", "-m", "nucflag.main", "-i", infile],
+        capture_output=True,
+    )
+    assert (
+        process.returncode == 1
+        and f"FileNotFoundError: {infile} must be indexed. Run 'samtools index {infile}'."
+        in process.stderr.decode()
+    )
+
+
 @pytest.mark.parametrize(
     ["cov", "bed", "expected_dir", "output_dir", "config"],
     [

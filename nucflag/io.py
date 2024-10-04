@@ -6,6 +6,7 @@ import numpy as np
 import pysam
 from intervaltree import Interval
 
+from .utils import check_bam_indexed
 from .region import Action, ActionOpt, IgnoreOpt, Region
 from .constants import WINDOW_SIZE
 
@@ -31,7 +32,7 @@ def read_bed_file(
 
 
 def read_asm_regions(
-    bamfile: str,
+    infile: str,
     input_regions: TextIO | None,
     *,
     threads: int = 4,
@@ -44,7 +45,13 @@ def read_asm_regions(
             (ctg, start, stop) for ctg, start, stop, *_ in read_bed_file(input_regions)
         )
     else:
-        with pysam.AlignmentFile(bamfile, threads=threads) as bam:
+        check_bam_indexed(infile)
+        if not infile.endswith(".bam"):
+            raise NotImplementedError(
+                "Reading regions from coverage file not supported."
+            )
+
+        with pysam.AlignmentFile(infile, threads=threads) as bam:
             sys.stderr.write(
                 f"Reading entire {bam.filename} in {window_size:,} bp intervals because no bedfile was provided.\n"
             )
