@@ -1,19 +1,31 @@
+import warnings
 from typing import Any, DefaultDict
 
 import matplotlib
 import matplotlib.axes
-import matplotlib.patches as ptch
-import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
+import matplotlib.pyplot as plt
+import matplotlib.patches as ptch
 from intervaltree import Interval, IntervalTree
 
-from .constants import PLOT_HEIGHT, PLOT_HEIGHT_SCALE_FACTOR, PLOT_WIDTH, PLOT_YLIM
+from .constants import (
+    PLOT_FONT_SIZE,
+    PLOT_HEIGHT,
+    PLOT_HEIGHT_SCALE_FACTOR,
+    PLOT_WIDTH,
+    PLOT_YLIM,
+)
 from .misassembly import Misassembly
 from .region import ActionOpt, Region
 
 
 # No margins.
+matplotlib.use("agg")
+warnings.filterwarnings("ignore")
+
+# Set text size
+matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 plt.rcParams["axes.xmargin"] = 0
 
 

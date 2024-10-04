@@ -1,30 +1,25 @@
 #!/usr/bin/env python
-import argparse
 import io
 import os
-import pprint
 import sys
-import warnings
+import pprint
+import argparse
 from collections import defaultdict
 from typing import DefaultDict
 from concurrent.futures.process import ProcessPoolExecutor
 
-import matplotlib
-import polars as pl
 import tomllib
 
 from .classifier.classifier import classify_plot_assembly
 from .config import DEF_CONFIG
-from .constants import PLOT_FONT_SIZE, WINDOW_SIZE
+from .constants import WINDOW_SIZE
 from .io import (
     read_asm_regions,
     read_ignored_regions,
     read_overlay_regions,
+    write_misassemblies_and_status,
 )
-from .region import Region, RegionStatus
-
-matplotlib.use("agg")
-warnings.filterwarnings("ignore")
+from .region import Region
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,9 +158,6 @@ def main():
     else:
         overlay_regions = defaultdict(lambda: defaultdict(set))
 
-    # Set text size
-    matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
-
     # res = []
     # for region in regions:
     #     res.append(classify_plot_assembly(
@@ -204,36 +196,13 @@ def main():
             ),
         )
 
-    try:
-        df_misasm = pl.concat(df for df in res if not df.is_empty())
-    except ValueError:
-        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
-
-    df_misasm = df_misasm.with_columns(
-        contig=pl.when(bool(args.input_regions))
-        .then(pl.col("contig"))
-        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+    write_misassemblies_and_status(
+        res,
+        regions,
+        args.output_misasm,
+        args.output_status,
+        bed_provided=bool(args.input_regions),
     )
-
-    # Save misassemblies to output bed
-    region_status = []
-    for region, start, end in regions:
-        if not df_misasm.filter(pl.col("contig") == region).is_empty():
-            region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
-        else:
-            region_status.append((region, start, end, RegionStatus.GOOD))
-
-    df_misasm.sort(by=["contig", "start"]).write_csv(
-        file=args.output_misasm, include_header=False, separator="\t"
-    )
-
-    if args.output_status:
-        df_asm_status = pl.DataFrame(
-            region_status, schema=["contig", "start", "end", "status"]
-        )
-        df_asm_status.sort(by=["contig", "start"]).write_csv(
-            args.output_status, include_header=False, separator="\t"
-        )
 
 
 if __name__ == "__main__":

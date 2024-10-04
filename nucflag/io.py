@@ -2,12 +2,13 @@ import sys
 from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
+import polars as pl
 import numpy as np
 import pysam
 from intervaltree import Interval
 
 from .utils import check_bam_indexed
-from .region import Action, ActionOpt, IgnoreOpt, Region
+from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
 from .constants import WINDOW_SIZE
 
 
@@ -136,3 +137,43 @@ def read_overlay_regions(
                 overlay_regions[region.name][i].add(region)
 
     return overlay_regions
+
+
+def write_misassemblies_and_status(
+    dfs_misasm: Iterable[pl.DataFrame],
+    regions: Iterable[tuple[str, int, int]],
+    output_misasm: TextIO,
+    output_status: TextIO | None,
+    *,
+    bed_provided: bool,
+):
+    try:
+        df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
+    except ValueError:
+        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
+
+    df_misasm = df_misasm.with_columns(
+        contig=pl.when(bed_provided)
+        .then(pl.col("contig"))
+        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+    )
+
+    # Save misassemblies to output bed
+    region_status = []
+    for region, start, end in regions:
+        if not df_misasm.filter(pl.col("contig") == region).is_empty():
+            region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
+        else:
+            region_status.append((region, start, end, RegionStatus.GOOD))
+
+    df_misasm.sort(by=["contig", "start"]).write_csv(
+        file=output_misasm, include_header=False, separator="\t"
+    )
+
+    if output_status:
+        df_asm_status = pl.DataFrame(
+            region_status, schema=["contig", "start", "end", "status"]
+        )
+        df_asm_status.sort(by=["contig", "start"]).write_csv(
+            output_status, include_header=False, separator="\t"
+        )
