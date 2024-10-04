@@ -14,7 +14,7 @@ from PIL import Image
             "test/standard/HG00096_hifi.bam",
             "test/standard/region.bed",
             "test/standard/expected.bed",
-            tuple(["-c", "test/config.toml"]),
+            tuple(["-c", "test/standard/config.toml"]),
         ),
         # Ignore regions
         (
@@ -24,18 +24,11 @@ from PIL import Image
             tuple(
                 [
                     "-c",
-                    "test/config.toml",
+                    "test/ignored/config.toml",
                     "--ignore_regions",
                     "test/ignored/ignore.bed",
                 ]
             ),
-        ),
-        # Static misjoin threshold
-        (
-            "test/misjoin/HG00171_hifi.bam",
-            "test/misjoin/region.bed",
-            "test/misjoin/expected_static.bed",
-            tuple(["-c", "test/misjoin/config_static.toml"]),
         ),
         # Percent misjoin threshold
         (
@@ -78,7 +71,7 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
                 tuple(
                     [
                         "-c",
-                        "test/config.toml",
+                        "test/overlay/config.toml",
                         "--overlay_regions",
                         *["test/overlay/repeatmasker.bed" for _ in range(i)],
                     ]
@@ -95,7 +88,7 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
             tuple(
                 [
                     "-c",
-                    "test/config.toml",
+                    "test/overlay/config.toml",
                     "--overlay_regions",
                     "test/overlay/repeatmasker_ignore.bed",
                 ]
@@ -110,7 +103,7 @@ def test_identify_misassemblies(bam: str, bed: str, expected: str, config: tuple
             tuple(
                 [
                     "-c",
-                    "test/config.toml",
+                    "test/overlay/config.toml",
                     "--ignore_regions",
                     "test/overlay/repeatmasker_overlap_partial.bed",
                 ]

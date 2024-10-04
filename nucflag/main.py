@@ -13,7 +13,7 @@ import matplotlib
 import polars as pl
 import tomllib
 
-from .classifier import classify_plot_assembly
+from .classifier.classifier import classify_plot_assembly
 from .config import DEF_CONFIG
 from .constants import PLOT_FONT_SIZE, WINDOW_SIZE
 from .io import (
@@ -204,7 +204,12 @@ def main():
             ),
         )
 
-    df_misasm = pl.concat(df for df in res if not df.is_empty()).with_columns(
+    try:
+        df_misasm = pl.concat(df for df in res if not df.is_empty())
+    except ValueError:
+        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
+
+    df_misasm = df_misasm.with_columns(
         contig=pl.when(bool(args.input_regions))
         .then(pl.col("contig"))
         .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))

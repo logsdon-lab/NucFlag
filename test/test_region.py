@@ -1,4 +1,4 @@
-import portion as pt
+from intervaltree import Interval
 import pytest
 
 from nucflag.region import (
@@ -16,13 +16,13 @@ def test_update_relative_region():
             [
                 Region(
                     name="",
-                    region=pt.open(0, 50),
+                    region=Interval(0, 50),
                     desc=None,
                     action=Action(ActionOpt.IGNORE, desc=IgnoreOpt.RELATIVE),
                 ),
                 Region(
                     name="",
-                    region=pt.open(-50, 0),
+                    region=Interval(-50, 0),
                     desc=None,
                     action=Action(ActionOpt.IGNORE, desc=IgnoreOpt.RELATIVE),
                 ),
@@ -35,13 +35,13 @@ def test_update_relative_region():
         [
             Region(
                 name="",
-                region=pt.open(10, 60),
+                region=Interval(10, 60),
                 desc=None,
                 action=Action(opt=ActionOpt.IGNORE, desc=IgnoreOpt.RELATIVE),
             ),
             Region(
                 name="",
-                region=pt.open(50, 100),
+                region=Interval(50, 100),
                 desc=None,
                 action=Action(opt=ActionOpt.IGNORE, desc=IgnoreOpt.RELATIVE),
             ),
@@ -59,7 +59,7 @@ def test_invalid_update_relative_region():
                 [
                     Region(
                         name="",
-                        region=pt.open(0, -250),
+                        region=Interval(0, -250),
                         desc=None,
                         action=Action(ActionOpt.IGNORE, desc=IgnoreOpt.RELATIVE),
                     )
@@ -75,7 +75,7 @@ def test_invalid_update_relative_region():
                 [
                     Region(
                         name="",
-                        region=pt.open(250, 0),
+                        region=Interval(250, 0),
                         desc=None,
                         action=Action(ActionOpt.IGNORE, desc=IgnoreOpt.RELATIVE),
                     )
