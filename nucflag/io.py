@@ -8,6 +8,7 @@ import pysam
 from intervaltree import Interval
 
 from .utils import check_bam_indexed
+from .misassembly import Misassembly
 from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
 from .constants import WINDOW_SIZE
 
@@ -158,19 +159,23 @@ def write_misassemblies_and_status(
         .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
     )
 
-    # Save misassemblies to output bed
-    region_status = []
-    for region, start, end in regions:
-        if not df_misasm.filter(pl.col("contig") == region).is_empty():
-            region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
-        else:
-            region_status.append((region, start, end, RegionStatus.GOOD))
-
     df_misasm.sort(by=["contig", "start"]).write_csv(
         file=output_misasm, include_header=False, separator="\t"
     )
 
     if output_status:
+        # Save misassemblies to output bed
+        region_status = []
+        # If only HETs, consider correctly assembled.
+        for region, start, end in regions:
+            df_misasm_ctg = df_misasm.filter(pl.col("contig") == region)
+            if df_misasm_ctg.filter(
+                pl.col("misassembly") != Misassembly.HET
+            ).is_empty():
+                region_status.append((region, start, end, RegionStatus.GOOD))
+            else:
+                region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
+
         df_asm_status = pl.DataFrame(
             region_status, schema=["contig", "start", "end", "status"]
         )
