@@ -8,6 +8,7 @@ Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nuc
 
 ## Input
 * BAM file of PacBio HiFi reads to an assembly.
+* (Optional) BED file of regions.
 
 ## Output
 * BED file of misassemblies.
