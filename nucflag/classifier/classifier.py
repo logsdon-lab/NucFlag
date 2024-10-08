@@ -147,19 +147,31 @@ def classify_misassemblies(
 
     collapse_height_thr = round(mean_first * config["first"]["thr_collapse_peak"])
     misjoin_height_thr = round(mean_first * config["first"]["thr_misjoin_valley"])
-    first_peak_coords = peak_finder(
-        df_cov,
-        height=collapse_height_thr,
+
+    # Including zeroes will alter the calculation of valley heights as will always be the max.
+    df_subset = df_cov.filter(pl.col("first") != 0)
+    first_data = df_subset["first"]
+    positions = df_subset["position"]
+
+    mean_no_peaks, first_peak_coords = peak_finder(
+        data=first_data,
+        positions=positions,
+        height_thr=collapse_height_thr - mean_first,
+        abs_height_thr=collapse_height_thr,
         width=config["first"]["thr_min_peak_width"],
         group_distance=config["first"]["peak_group_distance"],
     )
-    first_valley_coords = peak_finder(
-        df_cov,
-        invert=True,
-        height=-mean_first,
+    mean_no_valleys, first_valley_coords = peak_finder(
+        data=-first_data,
+        positions=positions,
+        height_thr=misjoin_height_thr,
+        abs_height_thr=-(mean_first - misjoin_height_thr),
         width=config["first"]["thr_min_valley_width"],
         group_distance=config["first"]["valley_group_distance"],
     )
+    # Recalculate thresholds based on means without peaks/valleys.
+    collapse_height_thr = round(mean_no_peaks * config["first"]["thr_collapse_peak"])
+    misjoin_height_thr = round(-mean_no_valleys * config["first"]["thr_misjoin_valley"])
 
     # Remove secondary rows that don't meet minimal secondary coverage.
     second_thr = round(mean_first * config["second"]["thr_min_perc_first"])

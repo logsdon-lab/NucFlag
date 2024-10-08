@@ -18,6 +18,9 @@ def identify_misjoins(
     het_ratio_thr: int,
 ) -> None:
     # Classify misjoins.
+    # Threshold for max allowed drop between two base positions in coverage.
+    thr_max_dy = misjoin_height_thr * 0.5
+
     for valley in valleys.iter():
         second_overlaps = second_outliers_coords.overlap(valley)
         overlaps_gap = misassemblies[Misassembly.GAP].overlaps(valley)
@@ -29,9 +32,10 @@ def identify_misjoins(
         if overlaps_gap or overlaps_collapse:
             continue
 
-        # Calculate relative height of valley.
-        # And only take those that meet criteria.
-        valley_below_thr = valley.data > misjoin_height_thr
+        # Filter on relative height of valley.
+        # Only allow valleys where max change in y doesn't account for half of the valley's depth
+        depth, max_dy = valley.data
+        valley_below_thr = depth > misjoin_height_thr and max_dy < thr_max_dy
 
         for overlap in second_overlaps:
             # Merge intervals.

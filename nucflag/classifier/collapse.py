@@ -13,8 +13,9 @@ def identify_collapses(
 ) -> None:
     # Intersect intervals and classify collapses.
     for peak in peaks.iter():
+        height, _ = peak.data
         # If height of suspected collapsed region is greater than thr, is a collapse.
-        if peak.data < collapse_height_thr:
+        if height < collapse_height_thr:
             continue
 
         overlaps: set[Interval] = second_outliers_coords.overlap(peak)

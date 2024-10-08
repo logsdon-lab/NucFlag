@@ -160,7 +160,7 @@ def plot_coverage(
     # Add misassembly rect patches to highlight region.
     for misasm, misasm_regions in misassemblies.items():
         color = misasm.as_color()
-        for misasm_region in misasm_regions.iter():
+        for misasm_region in misasm_regions:
             ax.axvspan(
                 misasm_region.begin,
                 misasm_region.end,

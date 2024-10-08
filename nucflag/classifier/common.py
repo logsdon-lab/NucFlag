@@ -2,25 +2,22 @@ import scipy.signal
 import numpy as np
 import polars as pl
 from intervaltree import Interval, IntervalTree
+import scipy.stats
 
 
 def peak_finder(
-    df: pl.DataFrame,
+    data: pl.Series,
+    positions: pl.Series,
     *,
-    height: int,
+    abs_height_thr: int,
+    height_thr: int,
     width: int,
-    invert: bool = False,
     group_distance: int = 5_000,
-) -> IntervalTree:
-    # Including zeroes will alter the calculation of valley heights as will always be the max.
-    df_subset = df.filter(pl.col("first") != 0)
-    data = df_subset["first"] if not invert else -df_subset["first"]
-    positions = df_subset["position"]
+) -> tuple[float, IntervalTree]:
     # Use height as first threshold.
-    peaks, peak_info = scipy.signal.find_peaks(data, height=height, width=width)
+    peaks, peak_info = scipy.signal.find_peaks(data, height=abs_height_thr, width=width)
     # Calculate median avoiding peaks.
-    median_no_peaks = data.filter(~positions.is_in(peaks)).median()
-
+    mean_no_peaks = data.filter(~positions.is_in(peaks)).mean()
     # Create interval tree adjusted to group distance.
     intervals = IntervalTree()
     for left_idx, right_idx, peak_ht in zip(
@@ -28,19 +25,28 @@ def peak_finder(
     ):
         left_idx, right_idx = int(left_idx), int(right_idx)
         left_pos, right_pos = positions[left_idx], positions[right_idx]
-        # Calculate relative height
-        peak_rel_ht = peak_ht - median_no_peaks
-        intervals.add(
-            Interval(
-                left_pos - group_distance,
-                right_pos + group_distance,
-                peak_rel_ht,
-            )
-        )
-    # Merge taking largest height.
-    intervals.merge_overlaps(strict=False, data_reducer=lambda x, y: max(x, y))
 
-    return IntervalTree(
+        # Calculate change is y along peak.
+        dy = np.diff(data[left_idx:right_idx])
+
+        # Calculate relative height
+        peak_rel_ht = peak_ht - mean_no_peaks
+        if peak_rel_ht < height_thr:
+            continue
+
+        peak = Interval(
+            left_pos - group_distance,
+            right_pos + group_distance,
+            (peak_rel_ht, dy.max()),
+        )
+        intervals.add(peak)
+
+    # Merge taking largest height and number of positives above threshold.
+    intervals.merge_overlaps(
+        strict=False, data_reducer=lambda x, y: (max(x[0], y[0]), max(x[1], y[1]))
+    )
+
+    return mean_no_peaks, IntervalTree(
         Interval(
             interval.begin + group_distance,
             interval.end - group_distance,
@@ -73,6 +79,6 @@ def calculate_het_ratio(
     first_signal: np.ndarray = scipy.signal.medfilt(df_het["first"], 3)
     second_signal: np.ndarray = scipy.signal.medfilt(df_het["second"], 3)
     # Use max to get general amplitude of data.
-    het_first_median = first_signal.max()
-    het_second_median = second_signal.max()
-    return het_second_median / (het_first_median + het_second_median)
+    het_first_max = first_signal.max()
+    het_second_max = second_signal.max()
+    return het_second_max / (het_first_max + het_second_max)
