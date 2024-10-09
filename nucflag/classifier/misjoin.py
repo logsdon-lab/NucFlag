@@ -5,6 +5,8 @@ from intervaltree import Interval, IntervalTree
 from .common import calculate_het_ratio
 from ..misassembly import Misassembly
 
+MAX_MISJOIN_DY_THR = 0.5
+
 
 def identify_misjoins(
     df_cov: pl.DataFrame,
@@ -19,7 +21,7 @@ def identify_misjoins(
 ) -> None:
     # Classify misjoins.
     # Threshold for max allowed drop between two base positions in coverage.
-    thr_max_dy = misjoin_height_thr * 0.5
+    thr_max_dy = misjoin_height_thr * MAX_MISJOIN_DY_THR
 
     for valley in valleys.iter():
         second_overlaps = second_outliers_coords.overlap(valley)

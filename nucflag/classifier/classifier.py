@@ -17,11 +17,13 @@ from .collapse import identify_collapses
 from .misjoin import identify_misjoins
 from .common import peak_finder, consecutive, filter_interval_expr
 from ..utils import check_bam_indexed
-from ..constants import PLOT_DPI, PROP_INCLUDE
 from ..io import get_coverage_by_base
 from ..misassembly import Misassembly
 from ..plot import plot_coverage
 from ..region import Region, update_relative_ignored_regions
+
+
+PLOT_DPI = 600
 
 
 def get_secondary_allele_coords(
@@ -52,40 +54,19 @@ def filter_misassembled_ignored_regions(
         # Remove any overlapping regions.
         regions.merge_overlaps(strict=False)
 
-        removed_regions = set()
+        # Copy the misassembled intervals as we need to modify the intervaltree.
+        for region in regions.items():
+            # Trim misassembly removing ignored region.
+            for ignored_region in ignored_regions.overlap(region):
+                regions.chop(ignored_region.begin, ignored_region.end)
+
         for region in regions.iter():
-            region_len = region.begin - region.end
-            expr_filter_region = filter_interval_expr(region)
-
-            # Remove ignored regions.
-            if ignored_regions.overlaps(region):
-                df_include = (
-                    df_cov.filter(expr_filter_region)
-                    .get_column("include")
-                    .value_counts()
-                )
-                try:
-                    include_rows = df_include.filter(pl.col("include")).get_column(
-                        "count"
-                    )[0]
-                except IndexError:
-                    include_rows = 0
-
-                # Include misassemblies that overlap with greater than 50% non-ignored region.
-                prop_include = include_rows / region_len
-                if prop_include > PROP_INCLUDE:
-                    # And update its status.
-                    lf = lf.with_columns(
-                        status=pl.when(expr_filter_region)
-                        .then(pl.lit(mtype))
-                        .otherwise(pl.col("status"))
-                    )
-                else:
-                    # Otherwise, remove it.
-                    removed_regions.add(region)
-
-        for rm_region in removed_regions:
-            regions.remove_overlap(rm_region.begin, rm_region.end)
+            # And update its status.
+            lf = lf.with_columns(
+                status=pl.when(filter_interval_expr(region))
+                .then(pl.lit(mtype))
+                .otherwise(pl.col("status"))
+            )
 
     return lf.collect()
 

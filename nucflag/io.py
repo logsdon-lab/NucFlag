@@ -7,10 +7,10 @@ import numpy as np
 import pysam
 from intervaltree import Interval
 
+from .config import DEF_CONFIG
 from .utils import check_bam_indexed
 from .misassembly import Misassembly
 from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
-from .constants import WINDOW_SIZE
 
 
 def get_coverage_by_base(
@@ -38,7 +38,7 @@ def read_asm_regions(
     input_regions: TextIO | None,
     *,
     threads: int = 4,
-    window_size: int = WINDOW_SIZE,
+    window_size: int = DEF_CONFIG["general"]["window_size"],
 ) -> Generator[tuple[str, int, int], None, None]:
     if input_regions:
         sys.stderr.write(f"Reading in regions from {input_regions.name}.\n")

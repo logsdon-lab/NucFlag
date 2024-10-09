@@ -12,7 +12,6 @@ import tomllib
 
 from .classifier.classifier import classify_plot_assembly
 from .config import DEF_CONFIG
-from .constants import WINDOW_SIZE
 from .io import (
     read_asm_regions,
     read_ignored_regions,
@@ -118,7 +117,9 @@ def main():
             args.infile,
             args.input_regions,
             threads=args.threads,
-            window_size=general_cfg.get("window_size", WINDOW_SIZE),
+            window_size=general_cfg.get(
+                "window_size", DEF_CONFIG["general"]["window_size"]
+            ),
         )
     )
     sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
