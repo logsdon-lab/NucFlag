@@ -1,4 +1,4 @@
-DEF_CONFIG = {
+DEF_CONFIG: dict[str, dict] = {
     "first": dict(
         thr_min_peak_width=20,
         thr_min_valley_width=5,

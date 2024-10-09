@@ -17,11 +17,13 @@ from .collapse import identify_collapses
 from .misjoin import identify_misjoins
 from .common import peak_finder, consecutive, filter_interval_expr
 from ..utils import check_bam_indexed
-from ..constants import PLOT_DPI
 from ..io import get_coverage_by_base
 from ..misassembly import Misassembly
 from ..plot import plot_coverage
 from ..region import Region, update_relative_ignored_regions
+
+
+PLOT_DPI = 600
 
 
 def get_secondary_allele_coords(

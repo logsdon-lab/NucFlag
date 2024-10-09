@@ -9,16 +9,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
 from intervaltree import Interval, IntervalTree
 
-from .constants import (
-    PLOT_FONT_SIZE,
-    PLOT_HEIGHT,
-    PLOT_HEIGHT_SCALE_FACTOR,
-    PLOT_WIDTH,
-    PLOT_YLIM,
-)
 from .misassembly import Misassembly
 from .region import ActionOpt, Region
 
+PLOT_FONT_SIZE = 16
+PLOT_HEIGHT = 5
+PLOT_WIDTH = 24
+PLOT_YLIM = 100
+PLOT_HEIGHT_SCALE_FACTOR = 2
 
 # No margins.
 matplotlib.use("agg")
