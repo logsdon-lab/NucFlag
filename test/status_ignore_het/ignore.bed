@@ -131,3 +131,7 @@ HG00514_rc-chr8_haplotype1-0000015	44677826	44691587	ALR/Alpha	noop
 HG00514_rc-chr8_haplotype1-0000015	44691588	44692157	Other	noop
 HG00514_rc-chr8_haplotype1-0000015	44692158	44702590	ALR/Alpha	noop
 HG00514_rc-chr8_haplotype1-0000015	44703189	44831362	Other	ignore:absolute
+HG00514_rc-chr8_haplotype1-0000015	41351903	41360730	MISJOIN	ignore:absolute
+HG00514_rc-chr8_haplotype1-0000015	44209675	44255668	MISJOIN	ignore:absolute
+HG00514_rc-chr8_haplotype1-0000015	44312228	44331363	MISJOIN	ignore:absolute
+HG00514_rc-chr8_haplotype1-0000015	44445971	44452179	MISJOIN	ignore:absolute
