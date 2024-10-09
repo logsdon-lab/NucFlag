@@ -2,7 +2,7 @@
 [![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
 [![PyPI - Version](https://img.shields.io/pypi/v/nucflag)](https://pypi.org/project/nucflag/)
 
-Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq). Script for making nucleotide frequency plots and marking misassemblies.
+Generates nucleotide frequency plots and genome misassembly BED files. Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq).
 
 ![Labeled Misassemblies](docs/imgs/misassemblies.png)
 
