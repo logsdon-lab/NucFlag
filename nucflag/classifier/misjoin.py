@@ -1,28 +1,20 @@
-import polars as pl
 from collections import defaultdict
 from intervaltree import Interval, IntervalTree
 
 from .common import calculate_het_ratio
 from ..misassembly import Misassembly
 
-MAX_MISJOIN_DY_THR = 0.5
-
 
 def identify_misjoins(
-    df_cov: pl.DataFrame,
     valleys: IntervalTree,
     second_outliers_coords: IntervalTree,
     classified_second_outliers: set[Interval],
     misassemblies: defaultdict[Misassembly, IntervalTree],
     *,
-    misjoin_height_thr: int,
-    second_thr: int,
-    het_ratio_thr: int,
+    misjoin_height_thr: float,
+    het_ratio_thr: float,
 ) -> None:
     # Classify misjoins.
-    # Threshold for max allowed drop between two base positions in coverage.
-    thr_max_dy = misjoin_height_thr * MAX_MISJOIN_DY_THR
-
     for valley in valleys.iter():
         second_overlaps = second_outliers_coords.overlap(valley)
         overlaps_gap = misassemblies[Misassembly.GAP].overlaps(valley)
@@ -36,19 +28,27 @@ def identify_misjoins(
 
         # Filter on relative height of valley.
         # Only allow valleys where max change in y doesn't account for half of the valley's depth
-        depth, max_dy = valley.data
-        valley_below_thr = depth > misjoin_height_thr and max_dy < thr_max_dy
+        depth = valley.data
+        valley_below_thr = depth > misjoin_height_thr
 
+        # Check for overlaps of valleys with regions with high secondary base support.
         for overlap in second_overlaps:
+            _, second_overlap_ht = overlap.data
+
+            # Adjust misjoin_height_thr by how much overlap height is.
+            # \/    ||
+            #    =  \/
+            # /\
+            adj_valley_below_thr = (depth + second_overlap_ht) > misjoin_height_thr
             # Merge intervals.
             new_overlap_interval = Interval(
                 min(valley.begin, overlap.begin), max(valley.end, overlap.end)
             )
-            if valley_below_thr:
+            if adj_valley_below_thr:
                 misassemblies[Misassembly.MISJOIN].add(new_overlap_interval)
                 classified_second_outliers.add(overlap)
             else:
-                het_ratio = calculate_het_ratio(df_cov, overlap, second_thr)
+                het_ratio = calculate_het_ratio(overlap)
                 if het_ratio >= het_ratio_thr:
                     misassemblies[Misassembly.ERROR].add(new_overlap_interval)
                     classified_second_outliers.add(overlap)
