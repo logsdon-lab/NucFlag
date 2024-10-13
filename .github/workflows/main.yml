@@ -33,7 +33,7 @@ jobs:
 
     - name: Install dependencies.
       run: |
-        make venv
+        make venv && make build
         venv/bin/python -m pip install -r requirements-dev.txt
 
     - name: Run tests.
