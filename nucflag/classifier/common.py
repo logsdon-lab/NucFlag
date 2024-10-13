@@ -1,8 +1,11 @@
+from typing import Generator
+
 import scipy.signal
+import scipy.stats
 import numpy as np
 import polars as pl
+
 from intervaltree import Interval, IntervalTree
-import scipy.stats
 
 
 def peak_finder(
@@ -14,6 +17,25 @@ def peak_finder(
     width: int,
     group_distance: int = 5_000,
 ) -> tuple[float, IntervalTree]:
+    """
+    Finds peaks using `scipy.signal.find_peaks` and fits a 2nd order polynomial to estimate peak height.
+
+    # Arguments
+    * `data`
+    * `positions`
+        * Positions of data.
+    * `abs_height_thr`
+        * Threshold absolute height of peak within data.
+    * `height_thr`
+        * Threshold estimated height of peak.
+    * `width`
+        * Threshold minimal width of peak.
+    * `group_distance`
+        * Group peaks by some distance.
+
+    # Returns
+    * Tuple of mean without peaks and interval tree of peaks.
+    """
     # Use height as first threshold.
     peaks, peak_info = scipy.signal.find_peaks(data, height=abs_height_thr, width=width)
     # Calculate mean avoiding peaks.
@@ -76,18 +98,73 @@ def peak_finder(
 
 
 # https://stackoverflow.com/a/7353335
-def consecutive(data, stepsize: int = 1):
+def consecutive(data, stepsize: int = 1) -> list[np.ndarray]:
     """
     Group consecutive positions allowing a maximum gap of stepsize.
-    Larger stepsize groups more positions.
+
+    # Arguments
+    * `data`
+        * Array of positions
+    * `stepsize`
+        * Split by distance.
+        * Larger stepsize groups more positions.
+
+    # Returns
+    * Split arrays
     """
     return np.split(data, np.where((np.diff(data) <= stepsize) == False)[0] + 1)  # noqa: E712
 
 
 def filter_interval_expr(interval: Interval, *, col: str = "position") -> pl.Expr:
+    """
+    Create `pl.Expr` to filter `col` by interval.
+
+    # Arguments
+    * `interval`
+        * `intervaltree.Interval` to filter by.
+    * `col`
+        * Column name.
+
+    # Returns
+    * `pl.Expr` to filter column.
+    """
     return pl.col(col).is_between(interval.begin, interval.end)
 
 
 def calculate_het_ratio(interval: Interval) -> float:
+    """
+    Calculate het ratio from `interval.data`.
+
+    # Arguments
+    * `interval`
+        * Requires `interval.data` with (first_coverage, second_coverage)
+
+    # Returns
+    * Het ratio.
+    """
     het_first_max, het_second_max = interval.data
     return het_second_max / (het_first_max + het_second_max)
+
+
+def subtract_interval(
+    interval: Interval, by: set[Interval]
+) -> Generator[Interval, None, None]:
+    """
+    Subtract `by` from `interval`.
+
+    # Arguments
+    * `interval`
+    * `by`
+        * Intervals to subtract from `interval`
+
+    # Returns
+    * Iterator of intervals within `interval` that aren't in `by`.
+    """
+    intervals = IntervalTree(Interval(i.begin, i.end) for i in by)
+    intervals.add(Interval(interval.begin, interval.end))
+    intervals.split_overlaps()
+
+    for interval in intervals.iter():
+        if interval in by:
+            continue
+        yield interval
