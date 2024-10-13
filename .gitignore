@@ -6,6 +6,7 @@ data/
 data
 dist/
 venv/
+build/
 exp/
 .snakemake
 *.egg-info
