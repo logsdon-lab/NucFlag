@@ -7,6 +7,7 @@ import argparse
 from collections import defaultdict
 from typing import DefaultDict
 from concurrent.futures.process import ProcessPoolExecutor
+from importlib.metadata import version
 
 import tomllib
 
@@ -93,10 +94,11 @@ def parse_args() -> argparse.Namespace:
         type=argparse.FileType("rt"),
         help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
     )
+    parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
     args = parse_args()
     if args.output_plot_dir:
         os.makedirs(args.output_plot_dir, exist_ok=True)
@@ -204,6 +206,8 @@ def main():
         args.output_status,
         bed_provided=bool(args.input_regions),
     )
+
+    return 0
 
 
 if __name__ == "__main__":

@@ -65,6 +65,14 @@ from .helpers.integration import run_integration_test
                 ]
             ),
         ),
+        # Subtract gap by misjoin.
+        (
+            "test/subtract_interval/HG00514_chr3_haplotype1-0000046:89839933-96622693.bed.gz",
+            "test/subtract_interval/region.bed",
+            "test/subtract_interval/expected.bed",
+            None,
+            tuple(),
+        ),
     ],
 )
 def test_identify_misassemblies(

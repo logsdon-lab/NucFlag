@@ -34,7 +34,41 @@ def get_secondary_allele_coords(
     for grp in consecutive(df_second_outliers["position"], stepsize=group_distance):
         if len(grp) < min_group_size:
             continue
-        second_outliers_coords.add(Interval(grp[0], grp[-1]))
+
+        start, end = grp[0], grp[-1]
+        # Calculate rolling max over 5 positions.
+        # This approximates general shape of coverage.
+        df_grp = (
+            df_second_outliers.filter(pl.col("position").is_between(start, end))
+            .drop("position")
+            .with_row_index()
+            .with_columns((pl.col("index") / 5).ceil())
+            .group_by("index")
+            .agg(
+                pl.col("first").max(),
+                pl.col("second").max(),
+            )
+            .sort("index")
+        )
+        # Fit second order polynomial using least squares regression to region.
+        pos = np.arange(df_grp.shape[0])
+        poly_first = np.polynomial.polynomial.Polynomial.fit(
+            pos, df_grp["first"], deg=2
+        )
+        poly_second = np.polynomial.polynomial.Polynomial.fit(
+            pos, df_grp["second"], deg=2
+        )
+        # Use unscaled coeff
+        coef_first = poly_first.convert().coef
+        coef_second = poly_second.convert().coef
+
+        # Predict new set of values with given polynomial.
+        vals_first: np.ndarray = np.polynomial.polynomial.polyval(pos, coef_first)
+        vals_second: np.ndarray = np.polynomial.polynomial.polyval(pos, coef_second)
+        # Check x2 coefficient to get orientation of polynomail.
+        first_ht = vals_first.max() if coef_first[2] < 0 else vals_first.min()
+        second_interval = Interval(start, end, (first_ht, vals_second.max()))
+        second_outliers_coords.add(second_interval)
 
     return second_outliers_coords
 
@@ -130,7 +164,15 @@ def classify_misassemblies(
     misjoin_height_thr = round(mean_first * config["first"]["thr_misjoin_valley"])
 
     # Including zeroes will alter the calculation of valley heights as will always be the max.
-    df_subset = df_cov.filter(pl.col("first") != 0)
+    # Set ignored regions to median. This avoids calling misassemblies outside that can extend to valid region.
+    df_subset = df_cov.with_columns(
+        first=pl.when(~pl.col("include"))
+        .then(pl.col("first").median())
+        .otherwise(pl.col("first")),
+        second=pl.when(~pl.col("include"))
+        .then(pl.col("second").median())
+        .otherwise(pl.col("second")),
+    ).filter((pl.col("first") != 0))
     first_data = df_subset["first"]
     positions = df_subset["position"]
 
@@ -171,7 +213,7 @@ def classify_misassemblies(
         second_outliers_coords,
         classified_second_outliers,
         misassemblies,
-        collapse_height_thr=collapse_height_thr,
+        collapse_height_thr=collapse_height_thr - mean_no_peaks,
     )
     identify_gaps(
         df_cov,
@@ -179,21 +221,18 @@ def classify_misassemblies(
         max_allowed_gap_size=config["gaps"]["thr_max_allowed_gap_size"],
     )
     identify_misjoins(
-        df_cov,
         first_valley_coords,
         second_outliers_coords,
         classified_second_outliers,
         misassemblies,
         misjoin_height_thr=misjoin_height_thr,
-        second_thr=second_thr,
         het_ratio_thr=config["second"]["thr_het_ratio"],
     )
     identify_hets(
-        df_cov,
         second_outliers_coords,
         classified_second_outliers,
         misassemblies,
-        second_thr=second_thr,
+        first_mean=mean_no_peaks,
         het_ratio_thr=config["second"]["thr_het_ratio"],
     )
 
