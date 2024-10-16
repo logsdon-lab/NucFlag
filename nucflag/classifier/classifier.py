@@ -66,7 +66,10 @@ def get_secondary_allele_coords(
         vals_first: np.ndarray = np.polynomial.polynomial.polyval(pos, coef_first)
         vals_second: np.ndarray = np.polynomial.polynomial.polyval(pos, coef_second)
         # Check x2 coefficient to get orientation of polynomail.
-        first_ht = vals_first.max() if coef_first[2] < 0 else vals_first.min()
+        try:
+            first_ht = vals_first.max() if coef_first[2] < 0 else vals_first.min()
+        except IndexError:
+            first_ht = vals_first.max()
         second_interval = Interval(start, end, (first_ht, vals_second.max()))
         second_outliers_coords.add(second_interval)
 

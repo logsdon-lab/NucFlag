@@ -81,7 +81,10 @@ def peak_finder(
         coef = poly.convert().coef
         vals: np.ndarray = np.polynomial.polynomial.polyval(pos, coef)
         # Calculate relative height.
-        approx_ht = vals.max() if coef[-1] < 0 else vals.min()
+        try:
+            approx_ht = vals.max() if coef[2] < 0 else vals.min()
+        except IndexError:
+            approx_ht = vals.max()
         peak_rel_ht = abs(approx_ht - mean_adj_no_peaks)
         if peak_rel_ht < height_thr:
             continue
