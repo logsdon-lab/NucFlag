@@ -27,53 +27,59 @@ PLOT_DPI = 600
 
 
 def get_secondary_allele_coords(
-    df_cov: pl.DataFrame, *, second_thr: int, group_distance: int, min_group_size: int
+    df_cov: pl.DataFrame,
+    *,
+    second_thr: int,
+    group_distance: int,
+    min_group_size: int,
+    thr_het_ratio: float,
 ) -> IntervalTree:
-    df_second_outliers = df_cov.filter(pl.col("second") > second_thr)
-    second_outliers_coords: IntervalTree = IntervalTree()
-    for grp in consecutive(df_second_outliers["position"], stepsize=group_distance):
+    df_second_outliers = (
+        df_cov.filter(pl.col("second") > second_thr)
+        .with_columns(het_ratio=pl.col("second") / (pl.col("first") + pl.col("second")))
+        .with_columns(
+            het_cls=pl.when(pl.col("het_ratio") > thr_het_ratio)
+            .then(pl.lit("Error"))
+            .otherwise(pl.lit("Het"))
+        )
+    )
+
+    het_coords = IntervalTree()
+    for grp in consecutive(
+        df_second_outliers.filter(pl.col("het_cls") == "Het").get_column("position"),
+        stepsize=group_distance,
+    ):
+        if len(grp) < min_group_size:
+            continue
+        start, end = grp[0], grp[-1]
+        ht = (
+            df_second_outliers.filter(pl.col("position").is_between(start, end))
+            .get_column("second")
+            .median()
+        )
+        het_coords.add(Interval(start, end, (Misassembly.HET, ht)))
+
+    err_coords: IntervalTree = IntervalTree()
+    for grp in consecutive(
+        df_second_outliers.filter(pl.col("het_cls") == "Error").get_column("position"),
+        stepsize=group_distance,
+    ):
         if len(grp) < min_group_size:
             continue
 
         start, end = grp[0], grp[-1]
-        # Calculate rolling max over 5 positions.
-        # This approximates general shape of coverage.
-        df_grp = (
+        ht = (
             df_second_outliers.filter(pl.col("position").is_between(start, end))
-            .drop("position")
-            .with_row_index()
-            .with_columns((pl.col("index") / 5).ceil())
-            .group_by("index")
-            .agg(
-                pl.col("first").max(),
-                pl.col("second").max(),
-            )
-            .sort("index")
+            .get_column("second")
+            .median()
         )
-        # Fit second order polynomial using least squares regression to region.
-        pos = np.arange(df_grp.shape[0])
-        poly_first = np.polynomial.polynomial.Polynomial.fit(
-            pos, df_grp["first"], deg=2
-        )
-        poly_second = np.polynomial.polynomial.Polynomial.fit(
-            pos, df_grp["second"], deg=2
-        )
-        # Use unscaled coeff
-        coef_first = poly_first.convert().coef
-        coef_second = poly_second.convert().coef
+        err_interval = Interval(start, end, (Misassembly.ERROR, ht))
+        # Remove hets.
+        het_coords.chop(err_interval.begin, err_interval.end)
 
-        # Predict new set of values with given polynomial.
-        vals_first: np.ndarray = np.polynomial.polynomial.polyval(pos, coef_first)
-        vals_second: np.ndarray = np.polynomial.polynomial.polyval(pos, coef_second)
-        # Check x2 coefficient to get orientation of polynomail.
-        try:
-            first_ht = vals_first.max() if coef_first[2] < 0 else vals_first.min()
-        except IndexError:
-            first_ht = vals_first.max()
-        second_interval = Interval(start, end, (first_ht, vals_second.max()))
-        second_outliers_coords.add(second_interval)
+        err_coords.add(err_interval)
 
-    return second_outliers_coords
+    return err_coords.union(het_coords)
 
 
 def filter_misassembled_ignored_regions(
@@ -206,6 +212,7 @@ def classify_misassemblies(
         second_thr=second_thr,
         group_distance=config["second"]["group_distance"],
         min_group_size=config["second"]["thr_min_group_size"],
+        thr_het_ratio=config["second"]["thr_het_ratio"],
     )
 
     classified_second_outliers: set[Interval] = set()
@@ -229,14 +236,11 @@ def classify_misassemblies(
         classified_second_outliers,
         misassemblies,
         misjoin_height_thr=misjoin_height_thr,
-        het_ratio_thr=config["second"]["thr_het_ratio"],
     )
     identify_hets(
         second_outliers_coords,
         classified_second_outliers,
         misassemblies,
-        first_mean=mean_no_peaks,
-        het_ratio_thr=config["second"]["thr_het_ratio"],
     )
 
     # Annotate df with misassembly and remove misassemblies in ignored regions.

@@ -68,7 +68,9 @@ def peak_finder(
         intervals.add(peak)
 
     # Merge taking largest height and number of positives above threshold.
-    intervals.merge_overlaps(strict=False, data_reducer=lambda x, y: max(x, y))
+    intervals.merge_overlaps(
+        strict=False, data_reducer=lambda x, y: (min(x[0], y[0]), max(x[1], y[1]))
+    )
 
     new_intervals = IntervalTree()
     for interval in intervals.iter():
@@ -80,7 +82,11 @@ def peak_finder(
         )
         coef = poly.convert().coef
         vals: np.ndarray = np.polynomial.polynomial.polyval(pos, coef)
-        # Calculate relative height.
+        # Calculate relative height with predicted values.
+        # Take max or min depending on polynomial ort.
+        # Negative a: /\
+        # Positive a: \/
+        # If linear: Just take max value.
         try:
             approx_ht = vals.max() if coef[2] < 0 else vals.min()
         except IndexError:
@@ -132,21 +138,6 @@ def filter_interval_expr(interval: Interval, *, col: str = "position") -> pl.Exp
     * `pl.Expr` to filter column.
     """
     return pl.col(col).is_between(interval.begin, interval.end)
-
-
-def calculate_het_ratio(interval: Interval) -> float:
-    """
-    Calculate het ratio from `interval.data`.
-
-    # Arguments
-    * `interval`
-        * Requires `interval.data` with (first_coverage, second_coverage)
-
-    # Returns
-    * Het ratio.
-    """
-    het_first_max, het_second_max = interval.data
-    return het_second_max / (het_first_max + het_second_max)
 
 
 def subtract_interval(
