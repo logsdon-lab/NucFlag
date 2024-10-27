@@ -1,7 +1,7 @@
 from collections import defaultdict
 from intervaltree import Interval, IntervalTree
 
-from .common import calculate_het_ratio, subtract_interval
+from .common import subtract_interval
 from ..misassembly import Misassembly
 
 
@@ -12,7 +12,6 @@ def identify_misjoins(
     misassemblies: defaultdict[Misassembly, IntervalTree],
     *,
     misjoin_height_thr: float,
-    het_ratio_thr: float,
 ) -> None:
     # Classify misjoins.
     for valley in valleys.iter():
@@ -33,7 +32,7 @@ def identify_misjoins(
 
         # Check for overlaps of valleys with regions with high secondary base support.
         for overlap in second_overlaps:
-            _, second_overlap_ht = overlap.data
+            het_cls, second_overlap_ht = overlap.data
 
             # Adjust misjoin_height_thr by how much overlap height is.
             # \/    ||
@@ -51,12 +50,8 @@ def identify_misjoins(
                 )
                 classified_second_outliers.add(overlap)
             else:
-                het_ratio = calculate_het_ratio(overlap)
-                if het_ratio >= het_ratio_thr:
-                    valid_overlap_intervals.append(
-                        (Misassembly.ERROR, new_overlap_interval)
-                    )
-                    classified_second_outliers.add(overlap)
+                valid_overlap_intervals.append((het_cls, new_overlap_interval))
+                classified_second_outliers.add(overlap)
 
             # Subtract interval by gaps.
             if overlaps_gap and valid_overlap_intervals:
