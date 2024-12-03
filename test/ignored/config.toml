@@ -32,9 +32,6 @@ thr_min_group_size = 5
 # Regions with a het ratio below this are hets. Otherwise, considered an error.
 thr_het_ratio = 0.25
 
-[gaps]
-thr_max_allowed_gap_size = 0
-
 [general]
 # Window size. Only applicable if no region bed file is provided.
 window_size = 5_000_000

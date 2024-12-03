@@ -8,7 +8,7 @@ thr_min_valley_width = 20
 # Valleys with depth above this threshold are considered misjoins.
 # ex. 0.9
 # Valleys with a depth of 90% of the mean coverage are misjoins.
-thr_misjoin_valley = 0.8
+thr_misjoin_valley = 0.95
 
 # Peaks with height above this threshold are considered collapses.
 # ex. 2.25
@@ -37,10 +37,6 @@ thr_min_group_size = 5
 # Regions with a het ratio below this are hets. Otherwise, considered an error.
 # Lower values will call more het sites as errors.
 thr_het_ratio = 0.2
-
-[gaps]
-# Allow coverage gaps up to this length.
-thr_max_allowed_gap_size = 0
 
 [general]
 # Window size. Only applicable if no region bed file is provided.
