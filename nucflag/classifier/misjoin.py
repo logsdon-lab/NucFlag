@@ -1,7 +1,6 @@
 from collections import defaultdict
 from intervaltree import Interval, IntervalTree
 
-from .common import subtract_interval
 from ..misassembly import Misassembly
 
 
@@ -16,7 +15,6 @@ def identify_misjoins(
     # Classify misjoins.
     for valley in valleys.iter():
         second_overlaps = second_outliers_coords.overlap(valley)
-        overlaps_gap = misassemblies[Misassembly.GAP].overlap(valley)
         overlaps_collapse = misassemblies[Misassembly.COLLAPSE].overlaps(
             valley
         ) or misassemblies[Misassembly.COLLAPSE_VAR].overlaps(valley)
@@ -53,30 +51,8 @@ def identify_misjoins(
                 valid_overlap_intervals.append((het_cls, new_overlap_interval))
                 classified_second_outliers.add(overlap)
 
-            # Subtract interval by gaps.
-            if overlaps_gap and valid_overlap_intervals:
-                (
-                    valid_overlap_misassembly,
-                    valid_overlap_interval,
-                ) = valid_overlap_intervals.pop()
-                for interval in subtract_interval(
-                    valid_overlap_interval, by=overlaps_gap
-                ):
-                    valid_overlap_intervals.append(
-                        (valid_overlap_misassembly, interval)
-                    )
-
             for misassembly, misassembly_interval in valid_overlap_intervals:
                 misassemblies[misassembly].add(misassembly_interval)
 
         if not second_overlaps and valley_below_thr:
-            valid_overlap_intervals = []
-            # Subtract interval by gaps.
-            if overlaps_gap:
-                for interval in subtract_interval(valley, by=overlaps_gap):
-                    valid_overlap_intervals.append(interval)
-            else:
-                valid_overlap_intervals.append(valley)
-
-            for interval in valid_overlap_intervals:
-                misassemblies[Misassembly.MISJOIN].add(interval)
+            misassemblies[Misassembly.MISJOIN].add(valley)

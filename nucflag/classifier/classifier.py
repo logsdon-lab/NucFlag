@@ -11,11 +11,10 @@ import polars as pl
 import pysam
 from intervaltree import Interval, IntervalTree
 
-from .gap import identify_gaps
 from .het import identify_hets
-from .collapse import identify_collapses
+from .collapse import get_secondary_allele_coords, identify_collapses
 from .misjoin import identify_misjoins
-from .common import peak_finder, consecutive, filter_interval_expr
+from .common import peak_finder, filter_interval_expr
 from ..utils import check_bam_indexed
 from ..io import get_coverage_by_base
 from ..misassembly import Misassembly
@@ -24,62 +23,6 @@ from ..region import Region, update_relative_ignored_regions
 
 
 PLOT_DPI = 600
-
-
-def get_secondary_allele_coords(
-    df_cov: pl.DataFrame,
-    *,
-    second_thr: int,
-    group_distance: int,
-    min_group_size: int,
-    thr_het_ratio: float,
-) -> IntervalTree:
-    df_second_outliers = (
-        df_cov.filter(pl.col("second") > second_thr)
-        .with_columns(het_ratio=pl.col("second") / (pl.col("first") + pl.col("second")))
-        .with_columns(
-            het_cls=pl.when(pl.col("het_ratio") > thr_het_ratio)
-            .then(pl.lit("Error"))
-            .otherwise(pl.lit("Het"))
-        )
-    )
-
-    het_coords = IntervalTree()
-    for grp in consecutive(
-        df_second_outliers.filter(pl.col("het_cls") == "Het").get_column("position"),
-        stepsize=group_distance,
-    ):
-        if len(grp) < min_group_size:
-            continue
-        start, end = grp[0], grp[-1]
-        ht = (
-            df_second_outliers.filter(pl.col("position").is_between(start, end))
-            .get_column("second")
-            .median()
-        )
-        het_coords.add(Interval(start, end, (Misassembly.HET, ht)))
-
-    err_coords: IntervalTree = IntervalTree()
-    for grp in consecutive(
-        df_second_outliers.filter(pl.col("het_cls") == "Error").get_column("position"),
-        stepsize=group_distance,
-    ):
-        if len(grp) < min_group_size:
-            continue
-
-        start, end = grp[0], grp[-1]
-        ht = (
-            df_second_outliers.filter(pl.col("position").is_between(start, end))
-            .get_column("second")
-            .median()
-        )
-        err_interval = Interval(start, end, (Misassembly.ERROR, ht))
-        # Remove hets.
-        het_coords.chop(err_interval.begin, err_interval.end)
-
-        err_coords.add(err_interval)
-
-    return err_coords.union(het_coords)
 
 
 def filter_misassembled_ignored_regions(
@@ -155,15 +98,16 @@ def classify_misassemblies(
         df_summary.filter(pl.col("statistic") == "std").select("first", "second").row(0)
     )
 
-    # If can't calculate metrics, means entire region is a gap.
+    # If can't calculate metrics, means entire region has 0 coverage or is ignored.
+    # Just call misjoin.
     if any(
         metric is None
         for metric in (mean_first, mean_second, stdev_first, stdev_second)
     ):
         return (
-            df_cov.with_columns(status=pl.lit(Misassembly.GAP)),
+            df_cov.with_columns(status=pl.lit(Misassembly.MISJOIN)),
             {
-                Misassembly.GAP: {
+                Misassembly.MISJOIN: {
                     Interval(df_cov["position"][0], df_cov["position"][-1])
                 }
             },
@@ -224,11 +168,6 @@ def classify_misassemblies(
         classified_second_outliers,
         misassemblies,
         collapse_height_thr=collapse_height_thr - mean_no_peaks,
-    )
-    identify_gaps(
-        df_cov,
-        misassemblies,
-        max_allowed_gap_size=config["gaps"]["thr_max_allowed_gap_size"],
     )
     identify_misjoins(
         first_valley_coords,
