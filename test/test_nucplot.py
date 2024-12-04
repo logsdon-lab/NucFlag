@@ -65,6 +65,14 @@ from .helpers.integration import run_integration_test
                 ]
             ),
         ),
+        # Check that collapses are trimmed if there is an overlapping misjoin
+        (
+            "test/trim_collapse_misjoin/HG02953_chr4_h1tg000006l#1-193384017:49454294-55363494:49454294-55363494.bed.gz",
+            "test/trim_collapse_misjoin/region.bed",
+            "test/trim_collapse_misjoin/expected_misassemblies.bed",
+            "test/trim_collapse_misjoin/expected_status.bed",
+            tuple(["-c", "test/trim_collapse_misjoin/config.toml"]),
+        ),
     ],
 )
 def test_identify_misassemblies(

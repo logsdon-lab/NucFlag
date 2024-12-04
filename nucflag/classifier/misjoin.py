@@ -15,13 +15,6 @@ def identify_misjoins(
     # Classify misjoins.
     for valley in valleys.iter():
         second_overlaps = second_outliers_coords.overlap(valley)
-        overlaps_collapse = misassemblies[Misassembly.COLLAPSE].overlaps(
-            valley
-        ) or misassemblies[Misassembly.COLLAPSE_VAR].overlaps(valley)
-
-        # Ignore if overlaps existing gap, collapse, or collapse with variant.
-        if overlaps_collapse:
-            continue
 
         # Filter on relative height of valley.
         # Only allow valleys where max change in y doesn't account for half of the valley's depth
@@ -52,7 +45,18 @@ def identify_misjoins(
                 classified_second_outliers.add(overlap)
 
             for misassembly, misassembly_interval in valid_overlap_intervals:
+                # Trim back collapses
+                misassemblies[Misassembly.COLLAPSE].chop(
+                    misassembly_interval.begin, misassembly_interval.end
+                )
+                misassemblies[Misassembly.COLLAPSE_VAR].chop(
+                    misassembly_interval.begin, misassembly_interval.end
+                )
                 misassemblies[misassembly].add(misassembly_interval)
 
         if not second_overlaps and valley_below_thr:
+            # Trim back collapses
+            misassemblies[Misassembly.COLLAPSE].chop(valley.begin, valley.end)
+            misassemblies[Misassembly.COLLAPSE_VAR].chop(valley.begin, valley.end)
+            # Add misjoin.
             misassemblies[Misassembly.MISJOIN].add(valley)

@@ -139,21 +139,21 @@ def plot_coverage(
 
     (_,) = ax.plot(
         df["position"],
-        df["first"],
-        "o",
-        color="black",
-        markeredgewidth=0.0,
-        markersize=2,
-        label="Most Frequent Base",
-    )
-    (_,) = ax.plot(
-        df["position"],
         df["second"],
         "o",
         color="red",
         markeredgewidth=0.0,
         markersize=2,
         label="Second Most Frequent Base",
+    )
+    (_,) = ax.plot(
+        df["position"],
+        df["first"],
+        "o",
+        color="black",
+        markeredgewidth=0.0,
+        markersize=2,
+        label="Most Frequent Base",
     )
     # Add misassembly rect patches to highlight region.
     for misasm, misasm_regions in misassemblies.items():
