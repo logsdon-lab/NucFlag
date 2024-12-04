@@ -125,7 +125,7 @@ def classify_misassemblies(
         second=pl.when(~pl.col("include"))
         .then(pl.col("second").median())
         .otherwise(pl.col("second")),
-    ).filter((pl.col("first") != 0))
+    )
     first_data = df_subset["first"]
     positions = df_subset["position"]
 
