@@ -1,7 +1,29 @@
+import polars as pl
 from collections import defaultdict
 from intervaltree import Interval, IntervalTree
 
+from nucflag.classifier.common import consecutive
+
 from ..misassembly import Misassembly
+
+
+def identify_zero_cov_regions(
+    df_cov: pl.DataFrame,
+    misassemblies: defaultdict[Misassembly, IntervalTree],
+) -> None:
+    # Classify regions with no coverage.
+    df_no_cov = df_cov.filter(pl.col("first") == 0)
+    # Group consecutive positions.
+    for region in consecutive(df_no_cov["position"], stepsize=1):
+        if region.size == 0:
+            continue
+        # In case of 1 len interval
+        if region[0] == region[-1]:
+            region_itv = Interval(region[0], region[0] + 1)
+        else:
+            region_itv = Interval(region[0], region[-1])
+
+        misassemblies[Misassembly.MISJOIN].add(region_itv)
 
 
 def identify_misjoins(
