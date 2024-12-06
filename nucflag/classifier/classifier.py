@@ -13,7 +13,7 @@ from intervaltree import Interval, IntervalTree
 
 from .het import identify_hets
 from .collapse import get_secondary_allele_coords, identify_collapses
-from .misjoin import identify_misjoins
+from .misjoin import identify_misjoins, identify_zero_cov_regions
 from .common import peak_finder, filter_interval_expr
 from ..utils import check_bam_indexed
 from ..io import get_coverage_by_base
@@ -125,7 +125,7 @@ def classify_misassemblies(
         second=pl.when(~pl.col("include"))
         .then(pl.col("second").median())
         .otherwise(pl.col("second")),
-    ).filter((pl.col("first") != 0))
+    )
     first_data = df_subset["first"]
     positions = df_subset["position"]
 
@@ -162,6 +162,10 @@ def classify_misassemblies(
     classified_second_outliers: set[Interval] = set()
     misassemblies: defaultdict[Misassembly, IntervalTree] = defaultdict(IntervalTree)
 
+    identify_zero_cov_regions(
+        df_cov,
+        misassemblies,
+    )
     identify_collapses(
         first_peak_coords,
         second_outliers_coords,
