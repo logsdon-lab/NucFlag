@@ -1,3 +1,4 @@
+from math import floor
 from typing import Generator
 
 import scipy.signal
@@ -37,7 +38,10 @@ def peak_finder(
     * Tuple of mean without peaks and interval tree of peaks.
     """
     # Use height as first threshold.
-    peaks, peak_info = scipy.signal.find_peaks(data, height=abs_height_thr, width=width)
+    # Ensure by flooring value that valley regions with cov 1 are found.
+    peaks, peak_info = scipy.signal.find_peaks(
+        data, height=floor(abs_height_thr), width=width
+    )
     # Calculate mean avoiding peaks.
     mean_no_peaks = data.filter(~positions.is_in(peaks)).mean()
     detect_valleys = data.mean() < 0
