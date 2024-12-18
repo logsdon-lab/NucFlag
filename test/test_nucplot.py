@@ -73,6 +73,14 @@ from .helpers.integration import run_integration_test
             "test/trim_collapse_misjoin/expected_status.bed",
             tuple(["-c", "test/trim_collapse_misjoin/config.toml"]),
         ),
+        # Check that misjoins that reach 1 are detected.
+        (
+            "test/missing_valleys/NA21487_chr22_h1tg000028l#1-46561102:8111393-11481292.bed.gz",
+            "test/missing_valleys/region.bed",
+            "test/missing_valleys/expected_misassemblies.bed",
+            "test/missing_valleys/expected_status.bed",
+            tuple(["-c", "test/missing_valleys/config.toml"]),
+        ),
     ],
 )
 def test_identify_misassemblies(
