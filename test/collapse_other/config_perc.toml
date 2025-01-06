@@ -3,29 +3,24 @@
 thr_min_peak_width = 20
 
 # Min width of valley to consider.
-thr_min_valley_width = 20
+thr_min_valley_width = 5
 
-# Valleys with depth above this threshold are considered misjoins.
-# ex. 0.9
-# Valleys with a depth of 90% of the mean coverage are misjoins.
-thr_misjoin_valley = 0.95
+# Valleys with height above this threshold are considered misjoins.
+thr_misjoin_valley = 0.8
 
-# Peaks with height above this threshold are considered collapses.
-# ex. 2.25
-# Peaks with a height of 225% of the mean coverage are considered collapses
-thr_collapse_peak = 2.25
+# Peaks with height above this threshold are considered collapses w/no variants.
+thr_collapse_peak = 3.0
 
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.
-valley_group_distance = 5000
+valley_group_distance = 1
 
-peak_group_distance = 5000
+peak_group_distance = 1
 
 [second]
 # Percent threshold of most freq base to allow second most freq base
-# ex. 0.1 and a mean coverage of 30.
 # 30 * 0.1 = 3 so above 3 is allowed.
-thr_min_perc_first = 0.05
+thr_min_perc_first = 0.1
 
 # Group consecutive positions allowing a maximum gap of x.
 # Larger value groups more positions.
@@ -35,8 +30,7 @@ group_distance = 10_000
 thr_min_group_size = 5
 
 # Regions with a het ratio below this are hets. Otherwise, considered an error.
-# Lower values will call more het sites as errors.
-thr_het_ratio = 0.2
+thr_het_ratio = 0.25
 
 [general]
 # Window size. Only applicable if no region bed file is provided.

@@ -10,8 +10,7 @@ thr_min_valley_width = 20
 # Valleys that dip 90% of the mean coverage are misjoins.
 thr_misjoin_valley = 0.95
 
-# Valleys with a majority of the positions below a depth at least this percent of the mean coverage are considered false-duplications.
-# Must also intersect with a misjoin.
+# Valleys with a depth at least this percent of the mean coverage are considered false-duplications AND intersects with a misjoin.
 thr_false_dupe_valley = 0.4
 
 # Peaks with a coverage height at least this percent of the mean coverage are considered collapses.
@@ -27,10 +26,7 @@ peak_group_distance = 5000
 
 # For false dupes which can have noisy signal dip.
 # Allows only grouping regions by x bp that are potential false dupes.
-# Won't group over non-false-dupe regions between false-dupe regions that have a relative height of thr_false_dupe_valley + false_dupe_group_stdev stdevs
-false_dupe_group_distance = 250000
-
-false_dupe_group_stdev = 2
+false_dupe_group_distance = 150000
 
 [second]
 # Percent threshold of most freq base to allow second most freq base

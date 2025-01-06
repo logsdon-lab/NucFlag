@@ -33,6 +33,7 @@ def identify_misjoins(
     misassemblies: defaultdict[Misassembly, IntervalTree],
     *,
     misjoin_height_thr: float,
+    misjoin_abs_height_thr: float,
 ) -> None:
     # Classify misjoins.
     for valley in valleys.iter():
@@ -40,8 +41,12 @@ def identify_misjoins(
 
         # Filter on relative height of valley.
         # Only allow valleys where max change in y doesn't account for half of the valley's depth
-        depth = valley.data
-        valley_below_thr = depth > misjoin_height_thr
+        rel_height, approx_height = valley.data
+        valley_below_thr = rel_height > misjoin_height_thr
+
+        # inverted values so reverse cmp
+        if approx_height > misjoin_abs_height_thr:
+            continue
 
         # Check for overlaps of valleys with regions with high secondary base support.
         for overlap in second_overlaps:
@@ -51,7 +56,7 @@ def identify_misjoins(
             # \/    ||
             #    =  \/
             # /\
-            adj_valley_below_thr = (depth + second_overlap_ht) > misjoin_height_thr
+            adj_valley_below_thr = (rel_height + second_overlap_ht) > misjoin_height_thr
             # Merge intervals.
             new_overlap_interval = Interval(
                 min(valley.begin, overlap.begin), max(valley.end, overlap.end)

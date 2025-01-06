@@ -12,30 +12,32 @@ from intervaltree import Interval, IntervalTree
 def peak_finder(
     data: pl.Series,
     positions: pl.Series,
-    *,
     abs_height_thr: float,
     height_thr: float,
     width: int,
-    group_distance: int = 5_000,
+    group_distance: int,
 ) -> tuple[float, IntervalTree]:
     """
-    Finds peaks using `scipy.signal.find_peaks` and fits a 2nd order polynomial to estimate peak height.
+    Finds peaks using `scipy.signal.find_peaks`.
 
     # Arguments
     * `data`
     * `positions`
-        * Positions of data.
+            * Positions of data.
     * `abs_height_thr`
-        * Threshold absolute height of peak within data.
+            * Threshold absolute height of peak within data.
     * `height_thr`
-        * Threshold estimated height of peak.
+            * Threshold estimated height of peak.
     * `width`
-        * Threshold minimal width of peak.
+            * Threshold minimal width of peak.
     * `group_distance`
-        * Group peaks by some distance.
+            * Group peaks by some distance.
 
     # Returns
     * Tuple of mean without peaks and interval tree of peaks.
+            * Each interval will contain data with the following:
+                * peak height relative to the mean
+                * peak approximate height
     """
     # Use height as first threshold.
     # Ensure by flooring value that valley regions with cov 1 are found.
@@ -43,25 +45,23 @@ def peak_finder(
         data, height=floor(abs_height_thr), width=width
     )
     # Calculate mean avoiding peaks.
-    mean_no_peaks = data.filter(~positions.is_in(peaks)).mean()
-    detect_valleys = data.mean() < 0
-    # Need to use adj mean for valleys as true height calculated by subtracting min coverage.
-    mean_adj_no_peaks = mean_no_peaks if not detect_valleys else -data.min()
+    # Correct for starting at zero.
+    adj_positions = positions - positions[0]
+    mean_no_peaks = data.filter(~adj_positions.is_in(peaks)).mean()
+    if not mean_no_peaks:
+        raise ValueError("Cannot calculate mean without peaks.")
+
     # Create interval tree adjusted to group distance.
     intervals = IntervalTree()
-    for left_idx, right_idx, peak_ht in zip(
+    for left_idx, right_idx, peak_height in zip(
         peak_info["left_ips"], peak_info["right_ips"], peak_info["peak_heights"]
     ):
         left_idx, right_idx = int(np.ceil(left_idx)), int(np.floor(right_idx))
         left_pos, right_pos = positions[left_idx], positions[right_idx]
 
         # Calculate relative height
-        if detect_valleys:
-            peak_rel_ht = -(mean_no_peaks + peak_ht)
-        else:
-            peak_rel_ht = peak_ht - mean_no_peaks
-
-        if peak_rel_ht < height_thr:
+        peak_rel_height = abs(abs(peak_height) - abs(mean_no_peaks))
+        if peak_rel_height < height_thr:
             continue
 
         peak = Interval(
@@ -79,31 +79,25 @@ def peak_finder(
     new_intervals = IntervalTree()
     for interval in intervals.iter():
         left_idx, right_idx = interval.data
-        # Fit second-order polynomial and predict new set of values. This should remove outliers.
+        # Fit second-order polynomial and predict new set of values.
+        # This should reduce the effect of outliers.
         pos = np.arange(left_idx, right_idx)
         poly = np.polynomial.polynomial.Polynomial.fit(
             pos, data[left_idx:right_idx], deg=2
         )
         coef = poly.convert().coef
         vals: np.ndarray = np.polynomial.polynomial.polyval(pos, coef)
-        # Calculate relative height with predicted values.
-        # Take max or min depending on polynomial ort.
-        # Negative a: /\
-        # Positive a: \/
-        # If linear: Just take max value.
-        try:
-            approx_ht = vals.max() if coef[2] < 0 else vals.min()
-        except IndexError:
-            approx_ht = vals.max()
-        peak_rel_ht = abs(approx_ht - mean_adj_no_peaks)
-        if peak_rel_ht < height_thr:
-            continue
 
+        # Calculate relative height with predicted values.
+        approx_height = abs(vals.max())
+        peak_rel_height = abs(approx_height - abs(mean_no_peaks))
+        if peak_rel_height < height_thr:
+            continue
         new_intervals.add(
             Interval(
                 interval.begin + group_distance,
                 interval.end - group_distance,
-                peak_rel_ht,
+                (peak_rel_height, approx_height),
             )
         )
 

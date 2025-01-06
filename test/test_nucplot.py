@@ -34,13 +34,13 @@ from .helpers.integration import run_integration_test
                 ]
             ),
         ),
-        # Percent misjoin threshold
+        # Collapse other
         (
-            "test/misjoin/HG00171_hifi.bam",
-            "test/misjoin/region.bed",
-            "test/misjoin/expected_perc.bed",
+            "test/collapse_other/HG00171_hifi.bam",
+            "test/collapse_other/region.bed",
+            "test/collapse_other/expected_perc.bed",
             None,
-            tuple(["-c", "test/misjoin/config_perc.toml"]),
+            tuple(["-c", "test/collapse_other/config_perc.toml"]),
         ),
         # No reads covering region.
         (
@@ -67,19 +67,27 @@ from .helpers.integration import run_integration_test
         ),
         # Check that collapses are trimmed if there is an overlapping misjoin
         (
-            "test/trim_collapse_misjoin/HG02953_chr4_h1tg000006l#1-193384017:49454294-55363494:49454294-55363494.bed.gz",
-            "test/trim_collapse_misjoin/region.bed",
-            "test/trim_collapse_misjoin/expected_misassemblies.bed",
-            "test/trim_collapse_misjoin/expected_status.bed",
-            tuple(["-c", "test/trim_collapse_misjoin/config.toml"]),
+            "test/merge_misjoin_false_dupe/HG02953_chr4_h1tg000006l#1-193384017:49454294-55363494:49454294-55363494.bed.gz",
+            "test/merge_misjoin_false_dupe/region.bed",
+            "test/merge_misjoin_false_dupe/expected_misassemblies.bed",
+            "test/merge_misjoin_false_dupe/expected_status.bed",
+            tuple(["-c", "test/merge_misjoin_false_dupe/config.toml"]),
         ),
-        # Check that misjoins that reach 1 are detected.
+        # Skip outliers
         (
-            "test/missing_valleys/NA21487_chr22_h1tg000028l#1-46561102:8111393-11481292.bed.gz",
-            "test/missing_valleys/region.bed",
-            "test/missing_valleys/expected_misassemblies.bed",
-            "test/missing_valleys/expected_status.bed",
-            tuple(["-c", "test/missing_valleys/config.toml"]),
+            "test/skip_outlier_valleys/NA21487_chr22_h1tg000028l#1-46561102:8111393-11481292.bed.gz",
+            "test/skip_outlier_valleys/region.bed",
+            "test/skip_outlier_valleys/expected_misassemblies.bed",
+            "test/skip_outlier_valleys/expected_status.bed",
+            tuple(["-c", "test/skip_outlier_valleys/config.toml"]),
+        ),
+        # Check that false duplications are detected.
+        (
+            "test/false_dupe/NA18939_chr1_h2tg000001l#1-251385737.bed.gz",
+            "test/false_dupe/region.bed",
+            "test/false_dupe/expected_misassemblies.bed",
+            "test/false_dupe/expected_status.bed",
+            tuple(["-c", "test/false_dupe/config.toml"]),
         ),
     ],
 )
@@ -98,6 +106,8 @@ def test_identify_misassemblies(
         "python",
         "-m",
         "nucflag.main",
+        "-d",
+        os.path.dirname(bam),
         "-i",
         bam,
         "-b",
@@ -166,7 +176,7 @@ def test_bam_idx_check():
             tuple(
                 [
                     "-c",
-                    "test/overlay/config.toml",
+                    "test/overlay/config_partial.toml",
                     "--ignore_regions",
                     "test/overlay/repeatmasker_overlap_partial.bed",
                 ]

@@ -2,10 +2,13 @@ DEF_CONFIG: dict[str, dict] = {
     "first": dict(
         thr_min_peak_width=20,
         thr_min_valley_width=20,
+        thr_false_dupe_valley=0.4,
         thr_misjoin_valley=0.95,
         thr_collapse_peak=2.25,
         valley_group_distance=5_000,
         peak_group_distance=5_000,
+        false_dupe_group_distance=200_000,
+        false_dupe_group_stdev=2,
     ),
     "second": dict(
         thr_min_perc_first=0.05,

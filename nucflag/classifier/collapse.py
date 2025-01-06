@@ -72,7 +72,7 @@ def identify_collapses(
 ) -> None:
     # Intersect intervals and classify collapses.
     for peak in peaks.iter():
-        height = peak.data
+        height, _ = peak.data
         # If height of suspected collapsed region is greater than thr, is a collapse.
         if height < collapse_height_thr:
             continue

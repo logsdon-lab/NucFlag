@@ -1,6 +1,7 @@
 from intervaltree import Interval
 import pytest
 
+from nucflag.classifier.false_duplication import merge_itvs
 from nucflag.region import (
     Action,
     ActionOpt,
@@ -8,6 +9,67 @@ from nucflag.region import (
     Region,
     update_relative_ignored_regions,
 )
+
+
+@pytest.mark.parametrize(
+    ["itvs", "exp_itvs", "kwargs"],
+    [
+        # Check book-ended merging.
+        (
+            [
+                Interval(1, 3),
+                Interval(3, 6),
+                Interval(6, 9),
+            ],
+            [Interval(1, 9)],
+            {},
+        ),
+        # Check dst.
+        (
+            [
+                Interval(1, 5),
+                Interval(10, 15),
+                Interval(25, 30),
+            ],
+            [Interval(1, 15), Interval(25, 30)],
+            {"dst": 5},
+        ),
+        # Check fn_merge_itv
+        (
+            [
+                Interval(1, 3, 1),
+                Interval(3, 6, 2),
+                Interval(6, 9, 4),
+            ],
+            # Sum itv.data. Add prev itv.data at every merge.
+            [Interval(1, 9, 8)],
+            {
+                "fn_merge_itv": lambda i1, i2: Interval(
+                    i1.begin, i2.end, i1.data * i2.data
+                )
+            },
+        ),
+        # check fn_cmp
+        (
+            [
+                Interval(1, 5, 1),
+                Interval(5, 10, 2),
+                # Cannot merge as itv.data would exceed 5.
+                Interval(10, 150, 3),
+            ],
+            [Interval(1, 10, 3), Interval(10, 150, 3)],
+            {
+                "fn_merge_itv": lambda i1, i2: Interval(
+                    i1.begin, i2.end, i1.data + i2.data
+                ),
+                "fn_cmp": lambda i1, i2: (i1.data + i2.data) <= 5,
+            },
+        ),
+    ],
+)
+def test_merge_itvs(itvs, exp_itvs, kwargs):
+    res = merge_itvs(itvs, **kwargs)
+    assert res == exp_itvs
 
 
 def test_update_relative_region():

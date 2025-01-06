@@ -5,16 +5,12 @@ thr_min_peak_width = 20
 # Min width of valley to consider.
 thr_min_valley_width = 20
 
-# Valleys with a coverage depth at least this percent of the mean coverage are considered misjoins.
+# Valleys with depth above this threshold are considered misjoins.
 # ex. 0.9
-# Valleys that dip 90% of the mean coverage are misjoins.
-thr_misjoin_valley = 0.95
+# Valleys with a depth of 90% of the mean coverage are misjoins.
+thr_misjoin_valley = 0.8
 
-# Valleys with a majority of the positions below a depth at least this percent of the mean coverage are considered false-duplications.
-# Must also intersect with a misjoin.
-thr_false_dupe_valley = 0.4
-
-# Peaks with a coverage height at least this percent of the mean coverage are considered collapses.
+# Peaks with height above this threshold are considered collapses.
 # ex. 2.25
 # Peaks with a height of 225% of the mean coverage are considered collapses
 thr_collapse_peak = 2.25
@@ -24,13 +20,6 @@ thr_collapse_peak = 2.25
 valley_group_distance = 5000
 
 peak_group_distance = 5000
-
-# For false dupes which can have noisy signal dip.
-# Allows only grouping regions by x bp that are potential false dupes.
-# Won't group over non-false-dupe regions between false-dupe regions that have a relative height of thr_false_dupe_valley + false_dupe_group_stdev stdevs
-false_dupe_group_distance = 250000
-
-false_dupe_group_stdev = 2
 
 [second]
 # Percent threshold of most freq base to allow second most freq base
@@ -51,4 +40,4 @@ thr_het_ratio = 0.2
 
 [general]
 # Window size. Only applicable if no region bed file is provided.
-window_size = 10_000_000
+window_size = 5_000_000

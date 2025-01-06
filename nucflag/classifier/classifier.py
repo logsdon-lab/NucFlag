@@ -14,13 +14,14 @@ from intervaltree import Interval, IntervalTree
 from .het import identify_hets
 from .collapse import get_secondary_allele_coords, identify_collapses
 from .misjoin import identify_misjoins, identify_zero_cov_regions
+from .false_duplication import identify_false_duplication
 from .common import peak_finder, filter_interval_expr
 from ..utils import check_bam_indexed
 from ..io import get_coverage_by_base
 from ..misassembly import Misassembly
 from ..plot import plot_coverage
 from ..region import Region, update_relative_ignored_regions
-
+from ..config import DEF_CONFIG
 
 PLOT_DPI = 600
 
@@ -114,7 +115,12 @@ def classify_misassemblies(
         )
 
     collapse_height_thr = round(mean_first * config["first"]["thr_collapse_peak"])
-    misjoin_height_thr = round(mean_first * config["first"]["thr_misjoin_valley"])
+    false_dupe_height_thr = round(
+        mean_first
+        * config["first"].get(
+            "thr_false_dupe_valley", DEF_CONFIG["first"]["thr_false_dupe_valley"]
+        )
+    )
 
     # Including zeroes will alter the calculation of valley heights as will always be the max.
     # Set ignored regions to median. This avoids calling misassemblies outside that can extend to valid region.
@@ -132,6 +138,7 @@ def classify_misassemblies(
     mean_no_peaks, first_peak_coords = peak_finder(
         data=first_data,
         positions=positions,
+        # relative height to the mean.
         height_thr=collapse_height_thr - mean_first,
         abs_height_thr=collapse_height_thr,
         width=config["first"]["thr_min_peak_width"],
@@ -140,14 +147,29 @@ def classify_misassemblies(
     mean_no_valleys, first_valley_coords = peak_finder(
         data=-first_data,
         positions=positions,
-        height_thr=misjoin_height_thr,
-        abs_height_thr=-(mean_first - misjoin_height_thr),
+        # Require that all valleys found
+        height_thr=false_dupe_height_thr,
+        abs_height_thr=-mean_first,
         width=config["first"]["thr_min_valley_width"],
         group_distance=config["first"]["valley_group_distance"],
     )
     # Recalculate thresholds based on means without peaks/valleys.
     collapse_height_thr = round(mean_no_peaks * config["first"]["thr_collapse_peak"])
     misjoin_height_thr = round(-mean_no_valleys * config["first"]["thr_misjoin_valley"])
+    misjoin_abs_height_thr = abs(mean_no_valleys) - misjoin_height_thr
+    false_dupe_height_thr = round(
+        -mean_no_valleys
+        * config["first"].get(
+            "thr_false_dupe_valley", DEF_CONFIG["first"]["thr_false_dupe_valley"]
+        )
+    )
+    # Get bp merge param.
+    false_dupe_bp_merge = config["first"].get(
+        "false_dupe_group_distance", DEF_CONFIG["first"]["false_dupe_group_distance"]
+    )
+    false_dupe_group_stdev = config["first"].get(
+        "false_dupe_group_stdev", DEF_CONFIG["first"]["false_dupe_group_stdev"]
+    )
 
     # Remove secondary rows that don't meet minimal secondary coverage.
     second_thr = round(mean_first * config["second"]["thr_min_perc_first"])
@@ -179,6 +201,16 @@ def classify_misassemblies(
         classified_second_outliers,
         misassemblies,
         misjoin_height_thr=misjoin_height_thr,
+        misjoin_abs_height_thr=misjoin_abs_height_thr,
+    )
+    identify_false_duplication(
+        df_cov,
+        first_valley_coords,
+        misassemblies,
+        false_dupe_height_thr=false_dupe_height_thr,
+        misjoin_abs_height_thr=misjoin_abs_height_thr,
+        bp_merge=false_dupe_bp_merge,
+        stdev_merge=false_dupe_group_stdev,
     )
     identify_hets(
         second_outliers_coords,
@@ -191,7 +223,6 @@ def classify_misassemblies(
         df_cov, misassemblies, ignored_regions_intervals
     )
 
-    # TODO: false dupes
     return df_cov, misassemblies
 
 

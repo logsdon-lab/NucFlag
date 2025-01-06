@@ -5,11 +5,12 @@ import sys
 import pprint
 import argparse
 from collections import defaultdict
-from typing import DefaultDict
+from typing import DefaultDict, Iterator
 from concurrent.futures.process import ProcessPoolExecutor
 from importlib.metadata import version
 
 import tomllib
+import polars as pl
 
 from .classifier.classifier import classify_plot_assembly
 from .config import DEF_CONFIG
@@ -161,43 +162,49 @@ def main() -> int:
     else:
         overlay_regions = defaultdict(lambda: defaultdict(set))
 
-    # res = []
-    # for region in regions:
-    #     res.append(classify_plot_assembly(
-    #         args.infile,
-    #         args.output_plot_dir,
-    #         args.output_cov_dir,
-    #         args.threads,
-    #         *region,
-    #         config,
-    #         overlay_regions.get(region[0]),
-    #         ignored_regions.get("all", set()).union(ignored_regions.get(region[0], set())),
-    #     ))
-
-    # Use new process pool, which doesn't cause a memory leak.
-    # Also create new processes aggressively to clear resources.
-    # https://stackoverflow.com/a/61492363
-    with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
-        res = pool.map(
-            classify_plot_assembly,
-            *zip(
-                *[
-                    (
-                        args.infile,
-                        args.output_plot_dir,
-                        args.output_cov_dir,
-                        args.threads,
-                        *region,
-                        config,
-                        overlay_regions.get(region[0]),
-                        ignored_regions.get("all", set()).union(
-                            ignored_regions.get(region[0], set())
-                        ),
-                    )
-                    for region in regions
-                ]
-            ),
+    if os.environ.get("NUCFLAG_DEBUG") == "1":
+        res: Iterator[pl.DataFrame] = (
+            classify_plot_assembly(
+                args.infile,
+                args.output_plot_dir,
+                args.output_cov_dir,
+                args.threads,
+                *region,
+                config,
+                overlay_regions.get(region[0]),
+                ignored_regions.get("all", set()).union(
+                    ignored_regions.get(region[0], set())
+                ),
+            )
+            for region in regions
         )
+    else:
+        # Use new process pool, which doesn't cause a memory leak.
+        # Also create new processes aggressively to clear resources.
+        # https://stackoverflow.com/a/61492363
+        with ProcessPoolExecutor(
+            max_workers=args.processes, max_tasks_per_child=1
+        ) as pool:
+            res = pool.map(
+                classify_plot_assembly,
+                *zip(
+                    *[
+                        (
+                            args.infile,
+                            args.output_plot_dir,
+                            args.output_cov_dir,
+                            args.threads,
+                            *region,
+                            config,
+                            overlay_regions.get(region[0]),
+                            ignored_regions.get("all", set()).union(
+                                ignored_regions.get(region[0], set())
+                            ),
+                        )
+                        for region in regions
+                    ]
+                ),
+            )
 
     write_misassemblies_and_status(
         res,

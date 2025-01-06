@@ -1,6 +1,6 @@
 import sys
 from collections import defaultdict
-from typing import DefaultDict, Generator, Iterable, TextIO
+from typing import DefaultDict, Generator, Iterable, Iterator, TextIO
 
 import polars as pl
 import numpy as np
@@ -141,7 +141,7 @@ def read_overlay_regions(
 
 
 def write_misassemblies_and_status(
-    dfs_misasm: Iterable[pl.DataFrame],
+    dfs_misasm: Iterator[pl.DataFrame],
     regions: Iterable[tuple[str, int, int]],
     output_misasm: TextIO,
     output_status: TextIO | None,

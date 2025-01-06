@@ -10,3 +10,4 @@ test/status_ignore_het/HG00514_rc-chr8_haplotype1-0000015:40851933-44831382.bed.
 test/subtract_interval/HG00514_chr3_haplotype1-0000046:89839933-96622693.bed.gz filter=lfs diff=lfs merge=lfs -text
 test/trim_collapse_misjoin/HG02953_chr4_h1tg000006l\#1-193384017:49454294-55363494:49454294-55363494.bed.gz filter=lfs diff=lfs merge=lfs -text
 test/missing_valleys/NA21487_chr22_h1tg000028l\#1-46561102:8111393-11481292.bed.gz filter=lfs diff=lfs merge=lfs -text
+test/false_dupe/NA18939_chr1_h2tg000001l\#1-251385737.bed.gz filter=lfs diff=lfs merge=lfs -text
