@@ -1,13 +1,13 @@
 test/ignored/HG00731_hifi.bam filter=lfs diff=lfs merge=lfs -text
-test/misjoin/HG00171_hifi.bam filter=lfs diff=lfs merge=lfs -text
+test/collapse_other/HG00171_hifi.bam filter=lfs diff=lfs merge=lfs -text
 test/standard/HG00096_hifi.bam filter=lfs diff=lfs merge=lfs -text
 test/overlay/NA20847_rc-chr3_haplotype2-0000105:89881870-96384969.bed.gz filter=lfs diff=lfs merge=lfs -text
 test/overlay/repeatmasker.bed filter=lfs diff=lfs merge=lfs -text
 test/overlay/repeatmasker_ignore.bed filter=lfs diff=lfs merge=lfs -text
-test/all_gap/cov.tsv.gz filter=lfs diff=lfs merge=lfs -text
 test/overlay/AG16778_chr4_contig-0003083:3247326-8431235.bed.gz filter=lfs diff=lfs merge=lfs -text
+test/all_gap/cov.tsv.gz filter=lfs diff=lfs merge=lfs -text
 test/status_ignore_het/HG00514_rc-chr8_haplotype1-0000015:40851933-44831382.bed.gz filter=lfs diff=lfs merge=lfs -text
 test/subtract_interval/HG00514_chr3_haplotype1-0000046:89839933-96622693.bed.gz filter=lfs diff=lfs merge=lfs -text
-test/trim_collapse_misjoin/HG02953_chr4_h1tg000006l\#1-193384017:49454294-55363494:49454294-55363494.bed.gz filter=lfs diff=lfs merge=lfs -text
-test/missing_valleys/NA21487_chr22_h1tg000028l\#1-46561102:8111393-11481292.bed.gz filter=lfs diff=lfs merge=lfs -text
+test/merge_misjoin_false_dupe/HG02953_chr4_h1tg000006l\#1-193384017:49454294-55363494:49454294-55363494.bed.gz filter=lfs diff=lfs merge=lfs -text
+test/skip_outlier_valleys/NA21487_chr22_h1tg000028l\#1-46561102:8111393-11481292.bed.gz filter=lfs diff=lfs merge=lfs -text
 test/false_dupe/NA18939_chr1_h2tg000001l\#1-251385737.bed.gz filter=lfs diff=lfs merge=lfs -text

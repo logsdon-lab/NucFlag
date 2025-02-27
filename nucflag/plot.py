@@ -4,10 +4,9 @@ from typing import Any, DefaultDict
 import matplotlib
 import matplotlib.axes
 import numpy as np
-import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
-from intervaltree import Interval, IntervalTree
+from intervaltree import Interval
 
 from .misassembly import Misassembly
 from .region import ActionOpt, Region
@@ -34,12 +33,10 @@ def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
 
 
 def plot_coverage(
-    df: pl.DataFrame,
-    misassemblies: dict[Misassembly, IntervalTree],
-    contig_name: str,
+    df_res: Any,
     overlay_regions: DefaultDict[int, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
-    region_bounds = Interval(df["position"].min(), df["position"].max())
+    region_bounds = Interval(df_res.st, df_res.end)
 
     subplot_handles = []
     subplot_labels = []
@@ -138,8 +135,8 @@ def plot_coverage(
         ax = axs[0]
 
     (_,) = ax.plot(
-        df["position"],
-        df["second"],
+        df_res.cov["pos"],
+        df_res.cov["second"],
         "o",
         color="red",
         markeredgewidth=0.0,
@@ -147,8 +144,8 @@ def plot_coverage(
         label="Second Most Frequent Base",
     )
     (_,) = ax.plot(
-        df["position"],
-        df["first"],
+        df_res.cov["pos"],
+        df_res.cov["first"],
         "o",
         color="black",
         markeredgewidth=0.0,
@@ -156,16 +153,21 @@ def plot_coverage(
         label="Most Frequent Base",
     )
     # Add misassembly rect patches to highlight region.
-    for misasm, misasm_regions in misassemblies.items():
-        color = misasm.as_color()
-        for misasm_region in misasm_regions:
-            ax.axvspan(
-                misasm_region.begin,
-                misasm_region.end,
-                color=color,
-                alpha=0.4,
-                label=misasm,
-            )
+    for region in df_res.regions.iter_rows(named=True):
+        try:
+            misassembly = Misassembly(region["status"])
+        except ValueError:
+            print(region)
+            continue
+        color = misassembly.as_color()
+        st, end = region["st"], region["end"]
+        ax.axvspan(
+            st,
+            end,
+            color=color,
+            alpha=0.4,
+            label=region["status"],
+        )
 
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073
@@ -199,11 +201,11 @@ def plot_coverage(
             fancybox=True,
         )
 
-    maxval = df["position"].max()
-    minval = df["position"].min()
+    minval = df_res.st
+    maxval = df_res.end
     subval = 0
 
-    title = "{}:{}-{}\n".format(contig_name, minval, maxval)
+    title = "{}:{}-{}\n".format(df_res.ctg, minval, maxval)
     plt.suptitle(title, fontweight="bold")
 
     if maxval < 1_000_000:
@@ -216,7 +218,7 @@ def plot_coverage(
         xlabels = [format((label - subval) / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, PLOT_YLIM)
+    ax.set_ylim(0, df_res.cov["first"].max())
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
     ax.set_xticklabels(xlabels)

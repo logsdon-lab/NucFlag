@@ -30,7 +30,10 @@ peak_group_distance = 5000
 # Won't group over non-false-dupe regions between false-dupe regions that have a relative height of thr_false_dupe_valley + false_dupe_group_stdev stdevs
 false_dupe_group_distance = 250000
 
-false_dupe_group_stdev = 2
+false_dupe_group_stdev = 1.5
+
+# Fit second order polynomial to peaks/valleys to reduce effect of outliers.
+fit_second_order_poly = false
 
 [second]
 # Percent threshold of most freq base to allow second most freq base

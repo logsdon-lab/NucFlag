@@ -5,22 +5,20 @@ import sys
 import pprint
 import argparse
 from collections import defaultdict
-from typing import DefaultDict, Iterator
-from concurrent.futures.process import ProcessPoolExecutor
+from typing import DefaultDict
 from importlib.metadata import version
 
 import tomllib
-import polars as pl
+from matplotlib import pyplot as plt
 
-from .classifier.classifier import classify_plot_assembly
-from .config import DEF_CONFIG
+from nucflag.plot import plot_coverage
+
 from .io import (
-    read_asm_regions,
-    read_ignored_regions,
     read_overlay_regions,
-    write_misassemblies_and_status,
 )
 from .region import Region
+
+from rs_nucflag import run_nucflag
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,8 +77,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-c",
         "--config",
-        default=DEF_CONFIG,
-        type=argparse.FileType("rb"),
+        default=None,
+        type=str,
         help="Additional threshold/params as toml file.",
     )
     parser.add_argument(
@@ -111,37 +109,23 @@ def main() -> int:
     else:
         config = args.config
 
-    sys.stderr.write(f"Using config:\n{pprint.pformat(config)}.\n")
-
-    # Read regions in bam or from input regions.
-    general_cfg: dict = config.get("general", {})
-    regions = list(
-        read_asm_regions(
-            args.infile,
-            args.input_regions,
-            threads=args.threads,
-            window_size=general_cfg.get(
-                "window_size", DEF_CONFIG["general"]["window_size"]
-            ),
-        )
-    )
-    sys.stderr.write(f"Loaded {len(regions)} region(s).\n")
+    sys.stderr.write(f"Using config:\n{pprint.pformat(config)}\n")
 
     # Load ignored regions.
-    if args.ignore_regions:
-        ignored_regions: DefaultDict[str, set[Region]] = read_ignored_regions(
-            args.ignore_regions
-        )
-        total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
-        total_ignored_regions = len(
-            regions if "all" in ignored_regions else ignored_regions
-        )
-        sys.stderr.write(
-            f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
-        )
-    else:
-        total_ignored_positions = 0
-        ignored_regions = defaultdict(set)
+    # if args.ignore_regions:
+    #     ignored_regions: DefaultDict[str, set[Region]] = read_ignored_regions(
+    #         args.ignore_regions
+    #     )
+    #     total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
+    #     total_ignored_regions = len(
+    #         regions if "all" in ignored_regions else ignored_regions
+    #     )
+    #     sys.stderr.write(
+    #         f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
+    #     )
+    # else:
+    total_ignored_positions = 0
+    ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
 
     # Load additional regions to overlay.
     if args.overlay_regions:
@@ -162,57 +146,17 @@ def main() -> int:
     else:
         overlay_regions = defaultdict(lambda: defaultdict(set))
 
-    if os.environ.get("NUCFLAG_DEBUG") == "1":
-        res: Iterator[pl.DataFrame] = (
-            classify_plot_assembly(
-                args.infile,
-                args.output_plot_dir,
-                args.output_cov_dir,
-                args.threads,
-                *region,
-                config,
-                overlay_regions.get(region[0]),
-                ignored_regions.get("all", set()).union(
-                    ignored_regions.get(region[0], set())
-                ),
-            )
-            for region in regions
-        )
-    else:
-        # Use new process pool, which doesn't cause a memory leak.
-        # Also create new processes aggressively to clear resources.
-        # https://stackoverflow.com/a/61492363
-        with ProcessPoolExecutor(
-            max_workers=args.processes, max_tasks_per_child=1
-        ) as pool:
-            res = pool.map(
-                classify_plot_assembly,
-                *zip(
-                    *[
-                        (
-                            args.infile,
-                            args.output_plot_dir,
-                            args.output_cov_dir,
-                            args.threads,
-                            *region,
-                            config,
-                            overlay_regions.get(region[0]),
-                            ignored_regions.get("all", set()).union(
-                                ignored_regions.get(region[0], set())
-                            ),
-                        )
-                        for region in regions
-                    ]
-                ),
-            )
+    res = run_nucflag(args.infile, args.input_regions.name, args.threads, args.config)
+    if not args.output_plot_dir:
+        return 0
 
-    write_misassemblies_and_status(
-        res,
-        regions,
-        args.output_misasm,
-        args.output_status,
-        bed_provided=bool(args.input_regions),
-    )
+    for r in res:
+        _ = plot_coverage(r, overlay_regions.get(r.ctg))
+
+        sys.stderr.write(f"Plotting {r.ctg}.\n")
+
+        output_plot = os.path.join(args.output_plot_dir, f"{r.ctg}.png")
+        plt.savefig(output_plot, dpi=600, bbox_inches="tight")
 
     return 0
 

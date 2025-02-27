@@ -1,13 +1,12 @@
-from enum import StrEnum
+from enum import StrEnum, auto
 
 
 class Misassembly(StrEnum):
-    COLLAPSE_OTHER = "COLLAPSE_OTHER"
-    COLLAPSE_VAR = "COLLAPSE_VAR"
-    COLLAPSE = "COLLAPSE"
-    MISJOIN = "MISJOIN"
-    FALSE_DUP = "FALSE_DUP"
-    HET = "HET"
+    COLLAPSE_OTHER = auto()
+    COLLAPSE_VAR = auto()
+    COLLAPSE = auto()
+    MISJOIN = auto()
+    FALSE_DUPE = auto()
 
     def as_color(self) -> str:
         match self:
@@ -17,11 +16,9 @@ class Misassembly(StrEnum):
                 return "green"
             case self.MISJOIN:
                 return "orange"
-            case self.FALSE_DUP:
+            case self.FALSE_DUPE:
                 return "purple"
-            case self.HET:
-                return "teal"
             case self.COLLAPSE_OTHER:
                 return "red"
             case _:
-                raise ValueError(f"Invalid color {self}")
+                raise ValueError(f"Unreachable {self}")

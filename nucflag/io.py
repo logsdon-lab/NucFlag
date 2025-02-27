@@ -7,9 +7,6 @@ import numpy as np
 import pysam
 from intervaltree import Interval
 
-from .config import DEF_CONFIG
-from .utils import check_bam_indexed
-from .misassembly import Misassembly
 from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
 
 
@@ -31,40 +28,6 @@ def read_bed_file(
             continue
         chrm, start, end, *other = line.strip().split("\t")
         yield (chrm, int(start), int(end), other)
-
-
-def read_asm_regions(
-    infile: str,
-    input_regions: TextIO | None,
-    *,
-    threads: int = 4,
-    window_size: int = DEF_CONFIG["general"]["window_size"],
-) -> Generator[tuple[str, int, int], None, None]:
-    if input_regions:
-        sys.stderr.write(f"Reading in regions from {input_regions.name}.\n")
-
-        yield from (
-            (ctg, start, stop) for ctg, start, stop, *_ in read_bed_file(input_regions)
-        )
-    else:
-        check_bam_indexed(infile)
-        if not infile.endswith(".bam"):
-            raise NotImplementedError(
-                "Reading regions from coverage file not supported."
-            )
-
-        with pysam.AlignmentFile(infile, threads=threads) as bam:
-            sys.stderr.write(
-                f"Reading entire {bam.filename} in {window_size:,} bp intervals because no bedfile was provided.\n"
-            )
-            for ref in bam.references:
-                ref_len = bam.get_reference_length(ref)
-                num, rem = divmod(ref_len, window_size)
-                for i in range(1, num + 1):
-                    yield (ref, (i - 1) * window_size, i * window_size)
-
-                final_start = num * window_size
-                yield (ref, final_start, final_start + rem)
 
 
 def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
@@ -171,9 +134,7 @@ def write_misassemblies_and_status(
             df_misasm_ctg = df_misasm.filter(
                 pl.col("contig") == f"{region}:{start}-{end}"
             )
-            if df_misasm_ctg.filter(
-                pl.col("misassembly") != str(Misassembly.HET)
-            ).is_empty():
+            if df_misasm_ctg.is_empty():
                 region_status.append((region, start, end, RegionStatus.GOOD))
             else:
                 region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
