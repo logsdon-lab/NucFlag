@@ -3,21 +3,9 @@ from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, Iterator, TextIO
 
 import polars as pl
-import numpy as np
-import pysam
 from intervaltree import Interval
 
 from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
-
-
-def get_coverage_by_base(
-    bam: pysam.AlignmentFile, contig: str, start: int, end: int
-) -> np.ndarray:
-    coverage = bam.count_coverage(
-        contig, start=start, stop=end, read_callback="nofilter", quality_threshold=None
-    )
-    assert len(coverage) == 4
-    return np.array(tuple(zip(*coverage)))
 
 
 def read_bed_file(
@@ -88,7 +76,8 @@ def read_overlay_regions(
     overlay_regions: DefaultDict[str, DefaultDict[int, set[Region]]] = defaultdict(
         lambda: defaultdict(set)
     )
-    for i, bed in enumerate(infiles):
+    # 1 as zero idx reserved for mapq
+    for i, bed in enumerate(infiles, 1):
         for region in read_regions(bed):
             # Add region to ignored regions.
             if (

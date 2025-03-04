@@ -4,6 +4,7 @@ from typing import Any, DefaultDict
 import matplotlib
 import matplotlib.axes
 import numpy as np
+import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
 from intervaltree import Interval
@@ -33,10 +34,12 @@ def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
 
 
 def plot_coverage(
-    df_res: Any,
+    itv: Interval,
+    df_cov: pl.DataFrame,
+    df_misasm: pl.DataFrame,
     overlay_regions: DefaultDict[int, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
-    region_bounds = Interval(df_res.st, df_res.end)
+    region_bounds = Interval(itv.begin, itv.end)
 
     subplot_handles = []
     subplot_labels = []
@@ -134,30 +137,23 @@ def plot_coverage(
         )
         ax = axs[0]
 
-    (_,) = ax.plot(
-        df_res.cov["pos"],
-        df_res.cov["second"],
-        "o",
+    ax.plot(
+        df_cov["pos"],
+        df_cov["second"],
         color="red",
-        markeredgewidth=0.0,
-        markersize=2,
         label="Second Most Frequent Base",
     )
-    (_,) = ax.plot(
-        df_res.cov["pos"],
-        df_res.cov["first"],
-        "o",
+    ax.plot(
+        df_cov["pos"],
+        df_cov["first"],
         color="black",
-        markeredgewidth=0.0,
-        markersize=2,
         label="Most Frequent Base",
     )
     # Add misassembly rect patches to highlight region.
-    for region in df_res.regions.iter_rows(named=True):
+    for region in df_misasm.iter_rows(named=True):
         try:
             misassembly = Misassembly(region["status"])
         except ValueError:
-            print(region)
             continue
         color = misassembly.as_color()
         st, end = region["st"], region["end"]
@@ -201,24 +197,22 @@ def plot_coverage(
             fancybox=True,
         )
 
-    minval = df_res.st
-    maxval = df_res.end
-    subval = 0
-
-    title = "{}:{}-{}\n".format(df_res.ctg, minval, maxval)
+    title = "{}:{}-{}\n".format(
+        region_bounds.data, region_bounds.begin, region_bounds.end
+    )
     plt.suptitle(title, fontweight="bold")
 
-    if maxval < 1_000_000:
-        xlabels = [format((label - subval), ",.0f") for label in ax.get_xticks()]
+    if region_bounds.end < 1_000_000:
+        xlabels = [format(label, ",.0f") for label in ax.get_xticks()]
         lab = "bp"
-    elif maxval < 10_000_000:
-        xlabels = [format((label - subval) / 1000, ",.1f") for label in ax.get_xticks()]
+    elif region_bounds.end < 10_000_000:
+        xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
     else:
-        xlabels = [format((label - subval) / 1000, ",.1f") for label in ax.get_xticks()]
+        xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, df_res.cov["first"].max())
+    ax.set_ylim(0, df_cov["first"].mean() * 2)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
     ax.set_xticklabels(xlabels)

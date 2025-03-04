@@ -1,7 +1,7 @@
 from enum import StrEnum, auto
-from typing import Generator, Iterable, NamedTuple
+from typing import Generator, NamedTuple
 
-import numpy as np
+import polars as pl
 from intervaltree import Interval
 
 
@@ -33,31 +33,56 @@ class Region(NamedTuple):
     action: Action | None
 
 
-def update_relative_ignored_regions(
-    ignored_regions: Iterable[Region], *, ctg_start: int, ctg_end: int
+def add_mapq_overlay_region(
+    name: str, df: pl.DataFrame
 ) -> Generator[Region, None, None]:
-    for region in ignored_regions:
-        if (region.action and region.action.opt != ActionOpt.IGNORE) or (
-            region.action and region.action.desc != IgnoreOpt.RELATIVE
-        ):
-            yield region
-            continue
-
-        if region.region.begin > region.region.end:
-            raise ValueError(
-                f"Region lower bound cannot be larger than upper bound. ({region})"
+    regions = (
+        df.with_columns(mapq_grp=pl.col("mapq").rle_id())
+        .group_by(["mapq_grp"])
+        .agg(
+            st=pl.col("pos").min(), end=pl.col("pos").max(), mapq=pl.col("mapq").first()
+        )
+        .with_columns(mapq_lower_bound=(pl.col("mapq") // 5) * 5)
+        .with_columns(
+            mapq_rng=pl.when(pl.col("mapq_lower_bound") == 60)
+            .then(pl.lit("55-60"))
+            .otherwise(
+                pl.col("mapq_lower_bound").cast(pl.String)
+                + "-"
+                + (pl.col("mapq_lower_bound") + 5).clip(0, 60).cast(pl.String)
             )
-        if region.region.begin < 0:
-            rel_start = ctg_end
-        else:
-            rel_start = ctg_start
-
-        lower = rel_start + region.region.begin
-        upper = rel_start + region.region.end
-
+        )
+        .with_columns(
+            mapq_color=pl.when(pl.col("mapq_rng") == "0-5")
+            .then(pl.lit("#666666"))
+            .when(pl.col("mapq_rng") == "5-10")
+            .then(pl.lit("#8f59a7"))
+            .when(pl.col("mapq_rng") == "10-15")
+            .then(pl.lit("#5954a8"))
+            .when(pl.col("mapq_rng") == "15-20")
+            .then(pl.lit("#01aef3"))
+            .when(pl.col("mapq_rng") == "20-25")
+            .then(pl.lit("#04b99e"))
+            .when(pl.col("mapq_rng") == "25-30")
+            .then(pl.lit("#8bc83b"))
+            .when(pl.col("mapq_rng") == "30-35")
+            .then(pl.lit("#cdde25"))
+            .when(pl.col("mapq_rng") == "35-40")
+            .then(pl.lit("#fff600"))
+            .when(pl.col("mapq_rng") == "40-45")
+            .then(pl.lit("#ffc309"))
+            .when(pl.col("mapq_rng") == "45-50")
+            .then(pl.lit("#fa931a"))
+            .when(pl.col("mapq_rng") == "50-55")
+            .then(pl.lit("#f8631f"))
+            .otherwise(pl.lit("#f21821"))
+        )
+        .select("st", "end", "mapq_rng", "mapq_color")
+    )
+    for st, end, mapq_rng, mapq_color in regions.iter_rows():
         yield Region(
-            region.name,
-            Interval(max(lower, 0), np.clip(upper, 0, ctg_end)),
-            region.desc,
-            region.action,
+            name,
+            Interval(st, end),
+            desc=mapq_rng,
+            action=Action(ActionOpt.PLOT, mapq_color),
         )

@@ -3,20 +3,22 @@ import io
 import os
 import sys
 import pprint
+import tomllib
 import argparse
 from collections import defaultdict
-from typing import DefaultDict
-from importlib.metadata import version
+from concurrent.futures import ProcessPoolExecutor
 
-import tomllib
-from matplotlib import pyplot as plt
+import polars as pl
+import matplotlib.pyplot as plt
 
-from nucflag.plot import plot_coverage
+from intervaltree import Interval
 
+from .plot import plot_coverage
 from .io import (
+    read_ignored_regions,
     read_overlay_regions,
 )
-from .region import Region
+from .region import Region, add_mapq_overlay_region
 
 from rs_nucflag import run_nucflag
 
@@ -93,8 +95,30 @@ def parse_args() -> argparse.Namespace:
         type=argparse.FileType("rt"),
         help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
     )
-    parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
+    # parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
     return parser.parse_args()
+
+
+def plot_misassemblies(
+    itv: Interval,
+    df_cov: pl.DataFrame,
+    df_misasm: pl.DataFrame,
+    overlay_regions: defaultdict[int, set[Region]],
+    output_dir: str,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    sys.stderr.write(f"Adding mapq track for {itv.data}.\n")
+    overlay_regions[0] = set(
+        add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
+    )
+    _ = plot_coverage(
+        itv=itv, df_cov=df_cov, df_misasm=df_misasm, overlay_regions=overlay_regions
+    )
+
+    sys.stderr.write(f"Plotting {itv.data}.\n")
+
+    output_plot = os.path.join(output_dir, f"{itv.data}.png")
+    plt.savefig(output_plot, dpi=600, bbox_inches="tight")
+    return df_cov, df_misasm
 
 
 def main() -> int:
@@ -106,30 +130,32 @@ def main() -> int:
 
     if isinstance(args.config, io.IOBase):
         config = tomllib.load(args.config)
+        sys.stderr.write(f"Using config:\n{pprint.pformat(config)}\n")
     else:
+        sys.stderr.write("Using default config.\n")
         config = args.config
 
-    sys.stderr.write(f"Using config:\n{pprint.pformat(config)}\n")
-
     # Load ignored regions.
-    # if args.ignore_regions:
-    #     ignored_regions: DefaultDict[str, set[Region]] = read_ignored_regions(
-    #         args.ignore_regions
-    #     )
-    #     total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
-    #     total_ignored_regions = len(
-    #         regions if "all" in ignored_regions else ignored_regions
-    #     )
-    #     sys.stderr.write(
-    #         f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
-    #     )
-    # else:
-    total_ignored_positions = 0
-    ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
+    if args.ignore_regions:
+        ignored_regions: defaultdict[str, set[Region]] = read_ignored_regions(
+            args.ignore_regions
+        )
+        total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
+        if args.input_regions and "all" in ignored_regions:
+            total_ignored_regions = len(args.input_regions.readlines())
+        else:
+            total_ignored_regions = len(ignored_regions)
+
+        sys.stderr.write(
+            f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
+        )
+    else:
+        total_ignored_positions = 0
+        ignored_regions = defaultdict(set)
 
     # Load additional regions to overlay.
     if args.overlay_regions:
-        overlay_regions: DefaultDict[str, DefaultDict[int, set[Region]]] = defaultdict(
+        overlay_regions: defaultdict[str, defaultdict[int, set[Region]]] = defaultdict(
             lambda: defaultdict(set)
         )
         # Pass reference of overlay regions to update.
@@ -146,17 +172,35 @@ def main() -> int:
     else:
         overlay_regions = defaultdict(lambda: defaultdict(set))
 
-    res = run_nucflag(args.infile, args.input_regions.name, args.threads, args.config)
+    results = run_nucflag(
+        args.infile,
+        args.input_regions.name if args.input_regions else None,
+        args.threads,
+        args.config,
+    )
     if not args.output_plot_dir:
         return 0
 
-    for r in res:
-        _ = plot_coverage(r, overlay_regions.get(r.ctg))
-
-        sys.stderr.write(f"Plotting {r.ctg}.\n")
-
-        output_plot = os.path.join(args.output_plot_dir, f"{r.ctg}.png")
-        plt.savefig(output_plot, dpi=600, bbox_inches="tight")
+    with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
+        plot_args = [
+            (
+                Interval(res.st, res.end, res.ctg),
+                res.cov,
+                res.regions,
+                overlay_regions.get(res.ctg, defaultdict()),
+                args.output_plot_dir,
+            )
+            for res in results
+        ]
+        futures = [
+            (args[0].data, pool.submit(plot_misassemblies, *args)) for args in plot_args
+        ]
+        dfs: list[tuple[pl.DataFrame, pl.DataFrame]] = []
+        for ctg, future in futures:
+            if future.exception():
+                print(f"Failed to plot {ctg} ({future.exception()})")
+                continue
+            dfs.append(future.result())
 
     return 0
 
