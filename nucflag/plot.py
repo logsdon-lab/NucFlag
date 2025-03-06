@@ -39,8 +39,6 @@ def plot_coverage(
     df_misasm: pl.DataFrame,
     overlay_regions: DefaultDict[int, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
-    region_bounds = Interval(itv.begin, itv.end)
-
     subplot_handles = []
     subplot_labels = []
 
@@ -95,7 +93,7 @@ def plot_coverage(
             )
             for row in regions:
                 # Skip rows not within bounds of df.
-                if not region_bounds.overlaps(row.region):
+                if not itv.overlaps(row.region):
                     continue
 
                 if not row.action or (row.action and row.action.opt != ActionOpt.PLOT):
@@ -197,15 +195,13 @@ def plot_coverage(
             fancybox=True,
         )
 
-    title = "{}:{}-{}\n".format(
-        region_bounds.data, region_bounds.begin, region_bounds.end
-    )
+    title = "{}:{}-{}\n".format(itv.data, itv.begin, itv.end)
     plt.suptitle(title, fontweight="bold")
 
-    if region_bounds.end < 1_000_000:
+    if itv.end < 1_000_000:
         xlabels = [format(label, ",.0f") for label in ax.get_xticks()]
         lab = "bp"
-    elif region_bounds.end < 10_000_000:
+    elif itv.end < 10_000_000:
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
     else:
