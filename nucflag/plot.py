@@ -138,12 +138,18 @@ def plot_coverage(
     ax.plot(
         df_cov["pos"],
         df_cov["second"],
+        marker="o",
+        markersize=2,
+        linestyle="None",
         color="red",
         label="Second Most Frequent Base",
     )
     ax.plot(
         df_cov["pos"],
         df_cov["first"],
+        marker="o",
+        linestyle="None",
+        markersize=2,
         color="black",
         label="Most Frequent Base",
     )

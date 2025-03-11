@@ -1,10 +1,11 @@
 [general]
 bp_merge = 5_000
-min_bp = 2
+min_bp = 1
 merge_across_type = false
+window = 10_000_000
 
 [first]
-n_zscores_low = 3.4
+n_zscores_low = 4.0
 n_zscores_high = 4.0
 
 [second]
