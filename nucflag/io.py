@@ -1,11 +1,33 @@
 import sys
 from collections import defaultdict
-from typing import DefaultDict, Generator, Iterable, Iterator, TextIO
+from typing import DefaultDict, Generator, Iterable, TextIO
 
 import polars as pl
 from intervaltree import Interval
 
-from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
+from .region import Action, ActionOpt, IgnoreOpt, Region
+
+
+BED9_COLS = [
+    "chrom",
+    "chromStart",
+    "chromEnd",
+    "name",
+    "score",
+    "strand",
+    "thickStart",
+    "thickEnd",
+    "itemRgb",
+]
+BED_STATUS_COLS = ["chrom", "chromStart", "chromEnd", "status", ""]
+STATUSES = [
+    "good",
+    "collapse",
+    "collapse_other",
+    "collapse_var",
+    "misjoin",
+    "false_dupe",
+]
 
 
 def read_bed_file(
@@ -92,45 +114,60 @@ def read_overlay_regions(
     return overlay_regions
 
 
-def write_misassemblies_and_status(
-    dfs_misasm: Iterator[pl.DataFrame],
-    regions: Iterable[tuple[str, int, int]],
-    output_misasm: TextIO,
+def write_output(
+    dfs_regions: list[pl.DataFrame],
+    output_regions: TextIO,
     output_status: TextIO | None,
-    *,
-    bed_provided: bool,
-):
+) -> None:
     try:
-        df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
+        df_region = pl.concat(df for df in dfs_regions if not df.is_empty())
     except ValueError:
-        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
+        df_region = pl.DataFrame(schema=["chrom", "chromStart", "chromEnd", "name"])
 
-    df_misasm = df_misasm.with_columns(
-        contig=pl.when(bed_provided)
-        .then(pl.col("contig"))
-        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+    df_region.sort(by=["chrom", "chromStart"]).write_csv(
+        file=output_regions, include_header=False, separator="\t"
     )
 
-    df_misasm.sort(by=["contig", "start"]).write_csv(
-        file=output_misasm, include_header=False, separator="\t"
+    if not output_status:
+        return
+
+    df_status = (
+        df_region.with_columns(
+            length=pl.col("chromEnd") - pl.col("chromStart"),
+            ctg_length=pl.col("chromEnd").max().over("chrom")
+            - pl.col("chromStart").min().over("chrom"),
+            chromStart=pl.col("chromStart").min().over("chrom"),
+            chromEnd=pl.col("chromEnd").max().over("chrom"),
+        )
+        .group_by(["chrom", "name"])
+        .agg(
+            chromStart=pl.col("chromStart").first(),
+            chromEnd=pl.col("chromEnd").first(),
+            perc=(pl.col("length").sum() / pl.col("ctg_length").first()) * 100.0,
+        )
+        .pivot(
+            on="name",
+            index=["chrom", "chromStart", "chromEnd"],
+            values="perc",
+            maintain_order=True,
+        )
+        .with_columns(
+            status=pl.when(pl.col("good") == 100.0)
+            .then(pl.lit("good"))
+            .otherwise(pl.lit("misassembled")),
+            # Ensure column exists.
+            # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
+            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
+        )
+        .select(
+            pl.col("chrom"),
+            pl.col("chromStart"),
+            pl.col("chromEnd"),
+            pl.col("status"),
+            *[pl.col(status) for status in STATUSES],
+        )
+        .fill_null(0.0)
     )
-
-    if output_status:
-        # Save misassemblies to output bed
-        region_status = []
-        # If only HETs, consider correctly assembled.
-        for region, start, end in regions:
-            df_misasm_ctg = df_misasm.filter(
-                pl.col("contig") == f"{region}:{start}-{end}"
-            )
-            if df_misasm_ctg.is_empty():
-                region_status.append((region, start, end, RegionStatus.GOOD))
-            else:
-                region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
-
-        df_asm_status = pl.DataFrame(
-            region_status, schema=["contig", "start", "end", "status"]
-        )
-        df_asm_status.sort(by=["contig", "start"]).write_csv(
-            output_status, include_header=False, separator="\t"
-        )
+    df_status.sort(by="chrom").write_csv(
+        file=output_status, include_header=True, separator="\t"
+    )

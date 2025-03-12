@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
 from intervaltree import Interval
 
-from .misassembly import Misassembly
 from .region import ActionOpt, Region
 
 PLOT_FONT_SIZE = 16
@@ -155,18 +154,20 @@ def plot_coverage(
     )
     # Add misassembly rect patches to highlight region.
     for region in df_misasm.iter_rows(named=True):
+        if region["name"] == "good":
+            continue
         try:
-            misassembly = Misassembly(region["status"])
+            rgb: str = region["itemRgb"]
+            rgb_color = [int(c) / 255 for c in rgb.split(",")]
         except ValueError:
             continue
-        color = misassembly.as_color()
-        st, end = region["st"], region["end"]
+        st, end = region["chromStart"], region["chromEnd"]
         ax.axvspan(
             st,
             end,
-            color=color,
+            color=rgb_color,
             alpha=0.4,
-            label=region["status"],
+            label=region["name"],
         )
 
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.

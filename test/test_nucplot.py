@@ -42,53 +42,6 @@ from .helpers.integration import run_integration_test
             None,
             tuple(["-c", "test/collapse_other/config_perc.toml"]),
         ),
-        # No reads covering region.
-        (
-            "test/all_gap/cov.tsv.gz",
-            "test/all_gap/region.bed",
-            "test/all_gap/expected.bed",
-            None,
-            tuple(),
-        ),
-        # Check that HETs don't affect status.
-        (
-            "test/status_ignore_het/HG00514_rc-chr8_haplotype1-0000015:40851933-44831382.bed.gz",
-            "test/status_ignore_het/region.bed",
-            "test/status_ignore_het/expected_misassemblies.bed",
-            "test/status_ignore_het/expected_status.bed",
-            tuple(
-                [
-                    "-c",
-                    "test/status_ignore_het/config.toml",
-                    "--ignore_regions",
-                    "test/status_ignore_het/ignore.bed",
-                ]
-            ),
-        ),
-        # Check that collapses are trimmed if there is an overlapping misjoin
-        (
-            "test/merge_misjoin_false_dupe/HG02953_chr4_h1tg000006l#1-193384017:49454294-55363494:49454294-55363494.bed.gz",
-            "test/merge_misjoin_false_dupe/region.bed",
-            "test/merge_misjoin_false_dupe/expected_misassemblies.bed",
-            "test/merge_misjoin_false_dupe/expected_status.bed",
-            tuple(["-c", "test/merge_misjoin_false_dupe/config.toml"]),
-        ),
-        # Skip outliers
-        (
-            "test/skip_outlier_valleys/NA21487_chr22_h1tg000028l#1-46561102:8111393-11481292.bed.gz",
-            "test/skip_outlier_valleys/region.bed",
-            "test/skip_outlier_valleys/expected_misassemblies.bed",
-            "test/skip_outlier_valleys/expected_status.bed",
-            tuple(["-c", "test/skip_outlier_valleys/config.toml"]),
-        ),
-        # Check that false duplications are detected.
-        (
-            "test/false_dupe/NA18939_chr1_h2tg000001l#1-251385737.bed.gz",
-            "test/false_dupe/region.bed",
-            "test/false_dupe/expected_misassemblies.bed",
-            "test/false_dupe/expected_status.bed",
-            tuple(["-c", "test/false_dupe/config.toml"]),
-        ),
     ],
 )
 def test_identify_misassemblies(

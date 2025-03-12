@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import io
 import os
 import sys
 import pprint
@@ -17,10 +16,13 @@ from .plot import plot_coverage
 from .io import (
     read_ignored_regions,
     read_overlay_regions,
+    write_output,
+    BED9_COLS,
+    BED_STATUS_COLS,
 )
 from .region import Region, add_mapq_overlay_region
 
-from rs_nucflag import run_nucflag
+from py_nucflag import run_nucflag
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,14 +34,14 @@ def parse_args() -> argparse.Namespace:
         "-i",
         "--infile",
         required=True,
-        help="Input bam file or per-base coverage tsv file with 3-columns (position, first, second). If a bam file is provided, it must be indexed.",
+        help="Indexed BAM file aligned to a genome assembly.",
     )
     parser.add_argument(
         "-b",
         "--input_regions",
         default=None,
         type=argparse.FileType("rt"),
-        help="Bed file with regions to check.",
+        help="BED file with regions to check.",
     )
     parser.add_argument(
         "-d",
@@ -54,34 +56,38 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-o",
-        "--output_misasm",
+        "--output_regions",
         default=sys.stdout,
         type=argparse.FileType("wt"),
-        help="Output bed file with misassembled regions.",
+        help=f"Output bed file with checked regions. With format: {BED9_COLS}",
     )
     parser.add_argument(
         "-s",
         "--output_status",
         default=None,
         type=argparse.FileType("wt"),
-        help="Bed file with status of contigs. With format: contig,start,end,misassembled|good",
+        help=f"Bed file with status of contigs. With format: {BED_STATUS_COLS}",
     )
     parser.add_argument(
-        "-t", "--threads", default=4, type=int, help="Threads for reading bam file."
+        "-t",
+        "--threads",
+        default=4,
+        type=int,
+        help="Threads for nucflag classification.",
     )
     parser.add_argument(
         "-p",
         "--processes",
         default=4,
         type=int,
-        help="Processes for classifying/plotting.",
+        help="Processes for plotting.",
     )
     parser.add_argument(
         "-c",
         "--config",
         default=None,
         type=str,
-        help="Additional threshold/params as toml file.",
+        help="Threshold/params as toml file.",
     )
     parser.add_argument(
         "--ignore_regions",
@@ -101,24 +107,34 @@ def parse_args() -> argparse.Namespace:
 
 def plot_misassemblies(
     itv: Interval,
-    df_cov: pl.DataFrame,
+    df_cov: pl.DataFrame | None,
     df_misasm: pl.DataFrame,
     overlay_regions: defaultdict[int, set[Region]],
-    output_dir: str,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
-    sys.stderr.write(f"Adding mapq track for {itv.data}.\n")
-    overlay_regions[0] = set(
-        add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
-    )
-    _ = plot_coverage(
-        itv=itv, df_cov=df_cov, df_misasm=df_misasm, overlay_regions=overlay_regions
-    )
+    plot_dir: str | None,
+    cov_dir: str | None,
+) -> pl.DataFrame:
+    # Plot contig.
+    if plot_dir and df_cov:
+        sys.stderr.write(f"Adding mapq track for {itv.data}.\n")
+        overlay_regions[0] = set(
+            add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
+        )
+        sys.stderr.write(f"Plotting {itv.data}.\n")
+        _ = plot_coverage(
+            itv=itv, df_cov=df_cov, df_misasm=df_misasm, overlay_regions=overlay_regions
+        )
 
-    sys.stderr.write(f"Plotting {itv.data}.\n")
+        output_plot = os.path.join(plot_dir, f"{itv.data}.png")
+        sys.stderr.write(f"Saving plot to {output_plot}.\n")
+        plt.savefig(output_plot, dpi=600, bbox_inches="tight")
 
-    output_plot = os.path.join(output_dir, f"{itv.data}.png")
-    plt.savefig(output_plot, dpi=600, bbox_inches="tight")
-    return df_cov, df_misasm
+    # Output coverage.
+    if cov_dir and df_cov:
+        sys.stderr.write(f"Saving coverage data for {itv.data}.\n")
+        output_cov = os.path.join(cov_dir, f"{itv.data}.tsv.gz")
+        df_cov.write_csv(output_cov, include_header=True)
+
+    return df_misasm
 
 
 def main() -> int:
@@ -128,15 +144,16 @@ def main() -> int:
     if args.output_cov_dir:
         os.makedirs(args.output_cov_dir, exist_ok=True)
 
-    if isinstance(args.config, io.IOBase):
-        config = tomllib.load(args.config)
-        sys.stderr.write(f"Using config:\n{pprint.pformat(config)}\n")
+    if isinstance(args.config, str):
+        with open(args.config, "rb") as fh:
+            config_str = pprint.pformat(tomllib.load(fh))
+        sys.stderr.write(f"Using config:\n{config_str}\n")
     else:
         sys.stderr.write("Using default config.\n")
-        config = args.config
 
     # Load ignored regions.
     if args.ignore_regions:
+        raise NotImplementedError
         ignored_regions: defaultdict[str, set[Region]] = read_ignored_regions(
             args.ignore_regions
         )
@@ -172,15 +189,15 @@ def main() -> int:
     else:
         overlay_regions = defaultdict(lambda: defaultdict(set))
 
+    sys.stderr.write(f"Running nucflag with {args.threads} threads.\n")
     results = run_nucflag(
         args.infile,
         args.input_regions.name if args.input_regions else None,
         args.threads,
         args.config,
     )
-    if not args.output_plot_dir:
-        return 0
 
+    dfs_regions: list[pl.DataFrame] = []
     with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
         plot_args = [
             (
@@ -189,19 +206,26 @@ def main() -> int:
                 res.regions,
                 overlay_regions.get(res.ctg, defaultdict()),
                 args.output_plot_dir,
+                args.output_cov_dir,
             )
             for res in results
         ]
         futures = [
             (args[0].data, pool.submit(plot_misassemblies, *args)) for args in plot_args
         ]
-        dfs: list[tuple[pl.DataFrame, pl.DataFrame]] = []
         for ctg, future in futures:
             if future.exception():
-                print(f"Failed to plot {ctg} ({future.exception()})")
+                sys.stderr.write(f"Failed to plot {ctg} ({future.exception()})\n")
                 continue
-            dfs.append(future.result())
+            dfs_regions.append(future.result())
 
+    sys.stderr.write(f"Writing region BED file to {args.output_regions.name}\n")
+    write_output(
+        dfs_regions,
+        args.output_regions,
+        args.output_status,
+    )
+    sys.stderr.write("Done!\n")
     return 0
 
 
