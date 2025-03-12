@@ -114,7 +114,7 @@ def plot_misassemblies(
     cov_dir: str | None,
 ) -> pl.DataFrame:
     # Plot contig.
-    if plot_dir and df_cov:
+    if plot_dir and isinstance(df_cov, pl.DataFrame):
         sys.stderr.write(f"Adding mapq track for {itv.data}.\n")
         overlay_regions[0] = set(
             add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
@@ -129,7 +129,7 @@ def plot_misassemblies(
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
 
     # Output coverage.
-    if cov_dir and df_cov:
+    if cov_dir and isinstance(df_cov, pl.DataFrame):
         sys.stderr.write(f"Saving coverage data for {itv.data}.\n")
         output_cov = os.path.join(cov_dir, f"{itv.data}.tsv.gz")
         df_cov.write_csv(output_cov, include_header=True)
@@ -198,6 +198,7 @@ def main() -> int:
     )
 
     dfs_regions: list[pl.DataFrame] = []
+    sys.stderr.write(f"Generating outputs with {args.processes} processes.\n")
     with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
         plot_args = [
             (

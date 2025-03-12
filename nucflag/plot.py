@@ -7,7 +7,9 @@ import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
+
 from intervaltree import Interval
+from matplotlib.collections import PatchCollection
 
 from .region import ActionOpt, Region
 
@@ -38,8 +40,7 @@ def plot_coverage(
     df_misasm: pl.DataFrame,
     overlay_regions: DefaultDict[int, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
-    subplot_handles = []
-    subplot_labels = []
+    subplot_patches: list[list[ptch.Rectangle]] = []
 
     number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
     if overlay_regions:
@@ -90,6 +91,7 @@ def plot_coverage(
                     ),
                 )
             )
+            patches: list[ptch.Rectangle] = []
             for row in regions:
                 # Skip rows not within bounds of df.
                 if not itv.overlaps(row.region):
@@ -116,14 +118,10 @@ def plot_coverage(
                     alpha=0.75,
                     label=row.desc,
                 )
-                bed_axs.add_patch(rect)
+                patches.append(rect)
 
-            # Get legend elements.
-            handles, labels = bed_axs.get_legend_handles_labels()
-            labels, ids = np.unique(labels, return_index=True)
-            handles = [handles[i] for i in ids]
-            subplot_handles.append(handles)
-            subplot_labels.append(labels)
+            bed_axs.add_collection(PatchCollection(patches, match_original=True))
+            subplot_patches.append(patches)
     else:
         fig, axs = plt.subplots(
             2,
@@ -183,23 +181,35 @@ def plot_coverage(
         loc="center",
         ncols=len(labels),
         borderaxespad=0,
-        fancybox=True,
+        fancybox=False,
     )
     # Add legends for each overlapped bedfile.
-    for i, (sp_handles, sp_labels) in enumerate(zip(subplot_handles, subplot_labels)):
+    for i, sp_patches in enumerate(subplot_patches):
         # Remove plot elements from legend ax.
         # Offset by 2 for coverage plot and its legend.
         legend_ax: matplotlib.axes.Axes = axs[i + number_of_overlap_beds + 2]
         minimalize_ax(legend_ax)
 
+        # Filter rectangle patches.
+        sp_patch_labels = set()
+        sp_filtered_patches = []
+        for patch in sp_patches:
+            patch_lbl = patch.get_label()
+            if patch_lbl in sp_patch_labels:
+                continue
+            sp_filtered_patches.append(patch)
+            sp_patch_labels.add(patch_lbl)
+
+        # Sort patches by label.
+        sp_filtered_patches.sort(key=lambda p: p.get_label())
+
         legend_ax.legend(
-            sp_handles,
-            sp_labels,
+            handles=sp_filtered_patches,
             loc="center",
             # Must have at least one col.
-            ncols=max(len(sp_handles) // 3, 1),
+            ncols=max(len(sp_filtered_patches) // 3, 1),
             borderaxespad=0,
-            fancybox=True,
+            fancybox=False,
         )
 
     title = "{}:{}-{}\n".format(itv.data, itv.begin, itv.end)

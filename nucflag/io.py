@@ -167,6 +167,8 @@ def write_output(
             *[pl.col(status) for status in STATUSES],
         )
         .fill_null(0.0)
+        # chromStart and chromEnd get cast to float for some reason.
+        .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
     )
     df_status.sort(by="chrom").write_csv(
         file=output_status, include_header=True, separator="\t"
