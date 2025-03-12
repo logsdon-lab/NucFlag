@@ -5,11 +5,6 @@ import polars as pl
 from intervaltree import Interval
 
 
-class RegionStatus(StrEnum):
-    MISASSEMBLED = auto()
-    GOOD = auto()
-
-
 class IgnoreOpt(StrEnum):
     ABSOLUTE = auto()
     RELATIVE = auto()

@@ -1,15 +1,15 @@
 [general]
-bp_merge = 5_000
-min_bp = 1
+bp_merge = 10_000
+bp_min = 5
+bp_window = 10_000_000
 merge_across_type = true
-window = 10_000_000
 store_coverage = true
 
 [first]
-n_zscores_low = 5.0
-n_zscores_high = 5.0
+n_zscores_low = 6.0
+n_zscores_high = 6.0
 
 [second]
 n_zscores_high = 3.0
-min_perc = 0.05
-thr_het_ratio = 0.2
+perc_min = 0.05
+ratio_het = 0.25
