@@ -1,5 +1,5 @@
 import sys
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
 import polars as pl
@@ -22,8 +22,8 @@ BED9_COLS = [
 BED_STATUS_COLS = ["chrom", "chromStart", "chromEnd", "status", ""]
 STATUSES = [
     "good",
+    "low_quality",
     "collapse",
-    "collapse_other",
     "collapse_var",
     "misjoin",
     "false_dupe",
@@ -90,26 +90,29 @@ def read_ignored_regions(infile: TextIO) -> DefaultDict[str, set[Region]]:
 def read_overlay_regions(
     infiles: Iterable[TextIO],
     *,
-    ignored_regions: DefaultDict[str, set[Region]] | None = None,
-) -> DefaultDict[str, DefaultDict[int, set[Region]]]:
+    ignored_regions: set[Region] | None = None,
+) -> DefaultDict[str, OrderedDict[str, set[Region]]]:
     """
     Read input overlay BED files and optionally updated ignored regions if any are specified.
     """
-    overlay_regions: DefaultDict[str, DefaultDict[int, set[Region]]] = defaultdict(
-        lambda: defaultdict(set)
+    overlay_regions: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
+        OrderedDict
     )
     # 1 as zero idx reserved for mapq
     for i, bed in enumerate(infiles, 1):
         for region in read_regions(bed):
             # Add region to ignored regions.
             if (
-                isinstance(ignored_regions, defaultdict)
+                isinstance(ignored_regions, set)
                 and region.action
                 and (region.action.opt == ActionOpt.IGNORE)
             ):
-                ignored_regions[region.name].add(region)
+                ignored_regions.add(region)
             else:
-                overlay_regions[region.name][i].add(region)
+                if str(i) not in overlay_regions[region.name]:
+                    overlay_regions[region.name][str(i)] = set()
+
+                overlay_regions[region.name][str(i)].add(region)
 
     return overlay_regions
 

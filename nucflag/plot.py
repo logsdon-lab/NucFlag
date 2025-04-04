@@ -1,5 +1,6 @@
+from collections import OrderedDict
 import warnings
-from typing import Any, DefaultDict
+from typing import Any
 
 import matplotlib
 import matplotlib.axes
@@ -38,9 +39,9 @@ def plot_coverage(
     itv: Interval,
     df_cov: pl.DataFrame,
     df_misasm: pl.DataFrame,
-    overlay_regions: DefaultDict[int, set[Region]] | None,
+    overlay_regions: OrderedDict[str, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
-    subplot_patches: list[list[ptch.Rectangle]] = []
+    subplot_patches: dict[str, list[ptch.Rectangle]] = {}
 
     number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
     if overlay_regions:
@@ -73,7 +74,7 @@ def plot_coverage(
         # Last axis with coverage plt.
         ax: matplotlib.axes.Axes = axs[number_of_overlap_beds]
         # Add bed regions.
-        for i, regions in overlay_regions.items():
+        for i, (name, regions) in enumerate(overlay_regions.items()):
             # Make axis as minimal as possible.
             bed_axs: matplotlib.axes.Axes = axs[i]
             minimalize_ax(bed_axs)
@@ -121,7 +122,7 @@ def plot_coverage(
                 patches.append(rect)
 
             bed_axs.add_collection(PatchCollection(patches, match_original=True))
-            subplot_patches.append(patches)
+            subplot_patches[name] = patches
     else:
         fig, axs = plt.subplots(
             2,
@@ -184,7 +185,7 @@ def plot_coverage(
         fancybox=False,
     )
     # Add legends for each overlapped bedfile.
-    for i, sp_patches in enumerate(subplot_patches):
+    for i, (name, sp_patches) in enumerate(subplot_patches.items()):
         # Remove plot elements from legend ax.
         # Offset by 2 for coverage plot and its legend.
         legend_ax: matplotlib.axes.Axes = axs[i + number_of_overlap_beds + 2]
@@ -203,9 +204,18 @@ def plot_coverage(
         # Sort patches by label.
         sp_filtered_patches.sort(key=lambda p: p.get_label())
 
+        # Don't allow title to be just index.
+        try:
+            _ = int(name)
+            title = None
+        except ValueError:
+            title = name
+
         legend_ax.legend(
             handles=sp_filtered_patches,
             loc="center",
+            alignment="left",
+            title=title,
             # Must have at least one col.
             ncols=max(len(sp_filtered_patches) // 3, 1),
             borderaxespad=0,
@@ -225,7 +235,7 @@ def plot_coverage(
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, df_cov["first"].mean() * 2)
+    ax.set_ylim(0, df_cov["first"].mean() * 3)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
     ax.set_xticklabels(xlabels)

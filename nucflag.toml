@@ -2,14 +2,14 @@
 bp_merge = 10_000
 bp_min = 5
 bp_window = 10_000_000
-merge_across_type = true
+merge_across_type = false
 store_coverage = true
 
 [first]
-n_zscores_low = 6.0
-n_zscores_high = 6.0
+n_zscores_low = 4.0
+n_zscores_high = 3.5
+n_zscores_false_dupe = 3.0
 
 [second]
-n_zscores_high = 3.0
-perc_min = 0.05
-ratio_het = 0.25
+n_zscores_high = 3.5
+ratio_het = 0.2

@@ -3,8 +3,9 @@ import os
 import sys
 import pprint
 import tomllib
+import tempfile
 import argparse
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 
 import polars as pl
@@ -14,7 +15,6 @@ from intervaltree import Interval
 
 from .plot import plot_coverage
 from .io import (
-    read_ignored_regions,
     read_overlay_regions,
     write_output,
     BED9_COLS,
@@ -101,6 +101,11 @@ def parse_args() -> argparse.Namespace:
         type=argparse.FileType("rt"),
         help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
     )
+    parser.add_argument(
+        "--add_mapq",
+        action="store_true",
+        help="Add mapq as an overlay track.",
+    )
     # parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
     return parser.parse_args()
 
@@ -109,16 +114,18 @@ def plot_misassemblies(
     itv: Interval,
     df_cov: pl.DataFrame | None,
     df_misasm: pl.DataFrame,
-    overlay_regions: defaultdict[int, set[Region]],
+    overlay_regions: OrderedDict[str, set[Region]],
     plot_dir: str | None,
     cov_dir: str | None,
+    add_mapq: bool,
 ) -> pl.DataFrame:
     # Plot contig.
     if plot_dir and isinstance(df_cov, pl.DataFrame):
-        sys.stderr.write(f"Adding mapq track for {itv.data}.\n")
-        overlay_regions[0] = set(
-            add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
-        )
+        if add_mapq:
+            sys.stderr.write(f"Adding mapq track for {itv.data}.\n")
+            overlay_regions["mapq"] = set(
+                add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
+            )
         sys.stderr.write(f"Plotting {itv.data}.\n")
         _ = plot_coverage(
             itv=itv, df_cov=df_cov, df_misasm=df_misasm, overlay_regions=overlay_regions
@@ -152,42 +159,29 @@ def main() -> int:
         sys.stderr.write("Using default config.\n")
 
     # Load ignored regions.
+    ignored_regions_files: list[str] = []
     if args.ignore_regions:
-        raise NotImplementedError
-        ignored_regions: defaultdict[str, set[Region]] = read_ignored_regions(
-            args.ignore_regions
-        )
-        total_ignored_positions = sum(len(v) for _, v in ignored_regions.items())
-        if args.input_regions and "all" in ignored_regions:
-            total_ignored_regions = len(args.input_regions.readlines())
-        else:
-            total_ignored_regions = len(ignored_regions)
+        sys.stderr.write(f"Ignoring region(s) from {args.ignore_regions}.\n")
+        ignored_regions_files.append(args.ignore_regions)
 
-        sys.stderr.write(
-            f"Ignoring {total_ignored_positions} position(s) from {total_ignored_regions} region(s).\n"
-        )
-    else:
-        total_ignored_positions = 0
-        ignored_regions = defaultdict(set)
-
-    # Load additional regions to overlay.
+    # Load additional regions to overlay and ignore.
+    tmpfile_ignored_regions = tempfile.NamedTemporaryFile("wt")
     if args.overlay_regions:
-        overlay_regions: defaultdict[str, defaultdict[int, set[Region]]] = defaultdict(
-            lambda: defaultdict(set)
+        additional_ignore_regions: set[Region] = set()
+        overlay_regions: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
+            OrderedDict
         )
         # Pass reference of overlay regions to update.
         overlay_regions = read_overlay_regions(
-            args.overlay_regions, ignored_regions=ignored_regions
-        )
-        added_ignored_positions = (
-            sum(len(v) for _, v in ignored_regions.items()) - total_ignored_positions
+            args.overlay_regions, ignored_regions=additional_ignore_regions
         )
         sys.stderr.write(f"Overlapping {len(args.overlay_regions)} bedfile(s).\n")
-        sys.stderr.write(
-            f"Added {added_ignored_positions} ignored position(s) from bedfile(s).\n"
-        )
+
+        # Write regions to tempfile.
+        for rgn in additional_ignore_regions:
+            print(rgn.as_tsv(), file=tmpfile_ignored_regions)
     else:
-        overlay_regions = defaultdict(lambda: defaultdict(set))
+        overlay_regions = defaultdict(OrderedDict)
 
     sys.stderr.write(f"Running nucflag with {args.threads} threads.\n")
     results = run_nucflag(
@@ -196,6 +190,7 @@ def main() -> int:
         args.threads,
         args.config,
     )
+    tmpfile_ignored_regions.close()
 
     dfs_regions: list[pl.DataFrame] = []
     sys.stderr.write(f"Generating outputs with {args.processes} processes.\n")
@@ -205,9 +200,10 @@ def main() -> int:
                 Interval(res.st, res.end, res.ctg),
                 res.cov,
                 res.regions,
-                overlay_regions.get(res.ctg, defaultdict()),
+                overlay_regions.get(res.ctg, OrderedDict()),
                 args.output_plot_dir,
                 args.output_cov_dir,
+                args.add_mapq,
             )
             for res in results
         ]

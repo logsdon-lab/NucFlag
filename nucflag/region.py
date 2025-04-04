@@ -20,12 +20,56 @@ class Action(NamedTuple):
     opt: ActionOpt
     desc: IgnoreOpt | str | None
 
+    def as_str(self):
+        action = f"{self.opt}"
+        if self.desc:
+            action = f"{action}:{self.desc}"
+        return action
+
 
 class Region(NamedTuple):
     name: str
     region: Interval
     desc: str | None
     action: Action | None
+
+    def as_tsv(self) -> str:
+        action_str = self.action.as_str() if self.action else "None"
+        return f"{self.name}\t{self.region.begin}\t{self.region.end}\t{self.desc}\t{action_str}"
+
+
+DF_MAPQ_COLORS = pl.DataFrame(
+    {
+        "mapq_rng": [
+            "0",
+            "1-5",
+            "5-10",
+            "10-15",
+            "15-20",
+            "20-25",
+            "25-30",
+            "30-35",
+            "35-40",
+            "40-45",
+            "45-50",
+            "50-55",
+        ],
+        "mapq_color": [
+            "#666666",
+            "#8f59a7",
+            "#5954a8",
+            "#01aef3",
+            "#04b99e",
+            "#8bc83b",
+            "#cdde25",
+            "#fff600",
+            "#ffc309",
+            "#fa931a",
+            "#f8631f",
+            "#f21821",
+        ],
+    }
+)
 
 
 def add_mapq_overlay_region(
@@ -54,33 +98,8 @@ def add_mapq_overlay_region(
                 + (pl.col("mapq_lower_bound") + 5).clip(0, 60).cast(pl.String)
             )
         )
-        .with_columns(
-            mapq_color=pl.when(pl.col("mapq_rng") == "0")
-            .then(pl.lit("#666666"))
-            .when(pl.col("mapq_rng") == "1-5")
-            .then(pl.lit("#8f59a7"))
-            .when(pl.col("mapq_rng") == "5-10")
-            .then(pl.lit("#5954a8"))
-            .when(pl.col("mapq_rng") == "10-15")
-            .then(pl.lit("#01aef3"))
-            .when(pl.col("mapq_rng") == "15-20")
-            .then(pl.lit("#04b99e"))
-            .when(pl.col("mapq_rng") == "20-25")
-            .then(pl.lit("#8bc83b"))
-            .when(pl.col("mapq_rng") == "25-30")
-            .then(pl.lit("#cdde25"))
-            .when(pl.col("mapq_rng") == "30-35")
-            .then(pl.lit("#fff600"))
-            .when(pl.col("mapq_rng") == "35-40")
-            .then(pl.lit("#ffc309"))
-            .when(pl.col("mapq_rng") == "40-45")
-            .then(pl.lit("#fa931a"))
-            .when(pl.col("mapq_rng") == "45-50")
-            .then(pl.lit("#f8631f"))
-            .when(pl.col("mapq_rng") == "50-55")
-            .then(pl.lit("#f21821"))
-            .otherwise(pl.lit("#FF8DA1"))
-        )
+        .join(DF_MAPQ_COLORS, on=["mapq_rng"], how="left")
+        .with_columns(pl.col("mapq_color").fill_null(pl.lit("#FF8DA1")))
         .select("st", "end", "mapq_rng", "mapq_color")
     )
     for st, end, mapq_rng, mapq_color in regions.iter_rows():
