@@ -18,7 +18,6 @@ from .io import (
     read_overlay_regions,
     write_output,
     BED9_COLS,
-    BED_STATUS_COLS,
 )
 from .region import Region, add_mapq_overlay_region
 
@@ -66,7 +65,7 @@ def parse_args() -> argparse.Namespace:
         "--output_status",
         default=None,
         type=argparse.FileType("wt"),
-        help=f"Bed file with status of contigs. With format: {BED_STATUS_COLS}",
+        help="Bed file with status of contigs and percentage breakdown of each misassembly type.",
     )
     parser.add_argument(
         "-t",

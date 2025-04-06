@@ -12,3 +12,4 @@ exp/
 *.egg-info
 Snakefile
 results/
+*.xml

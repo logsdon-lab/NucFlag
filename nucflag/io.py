@@ -19,12 +19,12 @@ BED9_COLS = [
     "thickEnd",
     "itemRgb",
 ]
-BED_STATUS_COLS = ["chrom", "chromStart", "chromEnd", "status", ""]
 STATUSES = [
     "good",
+    "indel",
+    "softclip",
     "low_quality",
     "collapse",
-    "collapse_var",
     "misjoin",
     "false_dupe",
 ]

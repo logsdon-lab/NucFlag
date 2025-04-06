@@ -135,21 +135,31 @@ def plot_coverage(
 
     ax.plot(
         df_cov["pos"],
-        df_cov["second"],
+        df_cov["indel"],
         marker="o",
-        markersize=2,
         linestyle="None",
-        color="red",
-        label="Second Most Frequent Base",
+        markersize=2,
+        color="purple",
+        label="Indels",
     )
+    if "mismatch" in df_cov.columns:
+        ax.plot(
+            df_cov["pos"],
+            df_cov["mismatch"],
+            marker="o",
+            markersize=2,
+            linestyle="None",
+            color="red",
+            label="Mismatches",
+        )
     ax.plot(
         df_cov["pos"],
-        df_cov["first"],
+        df_cov["cov"],
         marker="o",
         linestyle="None",
         markersize=2,
         color="black",
-        label="Most Frequent Base",
+        label="Coverage",
     )
     # Add misassembly rect patches to highlight region.
     for region in df_misasm.iter_rows(named=True):
@@ -235,7 +245,7 @@ def plot_coverage(
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, df_cov["first"].mean() * 3)
+    ax.set_ylim(0, df_cov["cov"].mean() * 3)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
     ax.set_xticklabels(xlabels)
