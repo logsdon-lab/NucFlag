@@ -109,3 +109,21 @@ def add_mapq_overlay_region(
             desc=mapq_rng,
             action=Action(ActionOpt.PLOT, mapq_color),
         )
+
+
+def add_bin_overlay_region(
+    name: str, df: pl.DataFrame
+) -> Generator[Region, None, None]:
+    regions = (
+        df.with_columns(bin_grp=pl.col("bin").rle_id())
+        .group_by(["bin_grp"])
+        .agg(st=pl.col("pos").min(), end=pl.col("pos").max(), bin=pl.col("bin").first())
+        .select("st", "end", "bin")
+    )
+    for st, end, bin_num in regions.iter_rows():
+        yield Region(
+            name,
+            Interval(st, end),
+            desc=f"b{bin_num}",
+            action=Action(ActionOpt.PLOT, None),
+        )

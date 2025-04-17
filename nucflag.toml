@@ -1,24 +1,31 @@
 [general]
+verbose = true
 bp_merge = 10_000
 bp_min = 1
 bp_wg_window = 10_000_000
 merge_across_type = false
-store_coverage = true
 
 [cov]
 n_zscores_low = 3.0
-n_zscores_high = 3.4
-n_zscores_false_dupe = 2.5
+n_zscores_high = 5.0
+n_zscores_false_dupe = 2.0
+store_coverage = true
 
-# [mismatch]
-# n_zscores_high = 3.4
-# ratio_het = 0.2
+[mismatch]
+n_zscores_high = 3.4
+ratio_het = 0.2
 
 [indel]
 n_zscores_high = 3.4
-ratio_indel = 0.5
-rolling_mean_window = 5
+ratio_indel = 0.8
+rolling_mean_window = 3
 
 [softclip]
 n_zscores_high = 3.4
 ratio_softclip = 0.5
+
+[group_by_ani]
+window_size = 1_000
+band_size = 5
+thr_dt_ident = 0.05
+min_grp_size = 50_000

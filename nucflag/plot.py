@@ -1,7 +1,4 @@
-from collections import OrderedDict
 import warnings
-from typing import Any
-
 import matplotlib
 import matplotlib.axes
 import numpy as np
@@ -9,15 +6,16 @@ import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
 
+from typing import Any
+from collections import OrderedDict
 from intervaltree import Interval
 from matplotlib.collections import PatchCollection
 
 from .region import ActionOpt, Region
 
 PLOT_FONT_SIZE = 16
-PLOT_HEIGHT = 5
+PLOT_HEIGHT = 6
 PLOT_WIDTH = 24
-PLOT_YLIM = 100
 PLOT_HEIGHT_SCALE_FACTOR = 2
 
 # No margins.
@@ -43,6 +41,7 @@ def plot_coverage(
 ) -> tuple[plt.Figure, Any]:
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
 
+    # TODO: Scale by number of elements. Move scaling factor to here.
     number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
     if overlay_regions:
         fig, axs = plt.subplots(
@@ -69,7 +68,6 @@ def plot_coverage(
             },
             layout="constrained",
         )
-        plt.subplots_adjust(hspace=0.6)
 
         # Last axis with coverage plt.
         ax: matplotlib.axes.Axes = axs[number_of_overlap_beds]
@@ -84,12 +82,7 @@ def plot_coverage(
             cmap = dict(
                 zip(
                     uniq_types,
-                    (
-                        c
-                        for c in plt.colormaps.get_cmap("hsv")(
-                            np.linspace(0, 1, len(uniq_types))
-                        )
-                    ),
+                    (np.random.rand(3) for _ in range(len(uniq_types))),
                 )
             )
             patches: list[ptch.Rectangle] = []
@@ -193,6 +186,8 @@ def plot_coverage(
         ncols=len(labels),
         borderaxespad=0,
         fancybox=False,
+        frameon=False,
+        prop={"size": 12},
     )
     # Add legends for each overlapped bedfile.
     for i, (name, sp_patches) in enumerate(subplot_patches.items()):
@@ -226,14 +221,15 @@ def plot_coverage(
             loc="center",
             alignment="left",
             title=title,
-            # Must have at least one col.
-            ncols=max(len(sp_filtered_patches) // 3, 1),
+            # At least 1-15 columns in legend.
+            ncols=min(max(len(sp_filtered_patches), 1), 15),
             borderaxespad=0,
             fancybox=False,
+            frameon=False,
+            prop={"size": 12},
         )
 
-    title = "{}:{}-{}\n".format(itv.data, itv.begin, itv.end)
-    plt.suptitle(title, fontweight="bold")
+    fig.suptitle("{}:{}-{}\n".format(itv.data, itv.begin, itv.end), fontweight="bold")
 
     if itv.end < 1_000_000:
         xlabels = [format(label, ",.0f") for label in ax.get_xticks()]

@@ -1,4 +1,4 @@
-import sys
+import logging
 from collections import OrderedDict, defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
@@ -7,6 +7,7 @@ from intervaltree import Interval
 
 from .region import Action, ActionOpt, IgnoreOpt, Region
 
+logger = logging.getLogger(__name__)
 
 BED9_COLS = [
     "chrom",
@@ -56,8 +57,8 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
                 try:
                     action_opt = ActionOpt(action_opt)
                 except ValueError:
-                    sys.stderr.write(
-                        f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}.\n"
+                    logger.error(
+                        f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}."
                     )
                     action_opt = ActionOpt.NOOP
 
