@@ -2,9 +2,7 @@
 import os
 import sys
 import logging
-import pprint
 import time
-import tomllib
 import tempfile
 import argparse
 from collections import OrderedDict, defaultdict
@@ -102,6 +100,13 @@ def parse_args() -> argparse.Namespace:
         help="Processes for plotting.",
     )
     parser.add_argument(
+        "-x",
+        "--preset",
+        default=None,
+        choices=["ont_r9", "hifi"],
+        help="Sequencing data specific preset.",
+    )
+    parser.add_argument(
         "-c",
         "--config",
         default=None,
@@ -178,13 +183,6 @@ def main() -> int:
     if args.output_cov_dir:
         os.makedirs(args.output_cov_dir, exist_ok=True)
 
-    if isinstance(args.config, str):
-        with open(args.config, "rb") as fh:
-            config_str = pprint.pformat(tomllib.load(fh))
-        logger.info(f"Using config:\n{config_str}")
-    else:
-        logger.info("Using default config.")
-
     # Load ignored regions.
     ignored_regions_files: list[str] = []
     if args.ignore_regions:
@@ -217,6 +215,7 @@ def main() -> int:
         args.input_regions.name if args.input_regions else None,
         args.threads,
         args.config,
+        args.preset,
     )
     tmpfile_ignored_regions.close()
 

@@ -14,7 +14,7 @@ from matplotlib.collections import PatchCollection
 from .region import ActionOpt, Region
 
 PLOT_FONT_SIZE = 16
-PLOT_HEIGHT = 6
+PLOT_HEIGHT = 5
 PLOT_WIDTH = 24
 PLOT_HEIGHT_SCALE_FACTOR = 2
 
