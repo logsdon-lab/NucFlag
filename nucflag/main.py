@@ -184,13 +184,16 @@ def main() -> int:
         os.makedirs(args.output_cov_dir, exist_ok=True)
 
     # Load ignored regions.
-    ignored_regions_files: list[str] = []
+    ignored_regions_file = None
+    tmpfile_ignored_regions = tempfile.NamedTemporaryFile("wt")
     if args.ignore_regions:
         logger.info(f"Ignoring region(s) from {args.ignore_regions}.")
-        ignored_regions_files.append(args.ignore_regions)
+        with open(args.ignore_regions, "rt") as fh:
+            for line in fh:
+                tmpfile_ignored_regions.write(line)
+        ignored_regions_file = tmpfile_ignored_regions
 
     # Load additional regions to overlay and ignore.
-    tmpfile_ignored_regions = tempfile.NamedTemporaryFile("wt")
     if args.overlay_regions:
         additional_ignore_regions: set[Region] = set()
         overlay_regions: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
@@ -205,17 +208,21 @@ def main() -> int:
         # Write regions to tempfile.
         for rgn in additional_ignore_regions:
             print(rgn.as_tsv(), file=tmpfile_ignored_regions)
+        # Toggle ignored regions if additional ones found in overlay bed.
+        if not ignored_regions_file and additional_ignore_regions:
+            ignored_regions_file = tmpfile_ignored_regions
     else:
         overlay_regions = defaultdict(OrderedDict)
 
     logger.info(f"Running nucflag with {args.threads} threads.")
     results = run_nucflag(
         args.infile,
-        args.fasta,
-        args.input_regions.name if args.input_regions else None,
-        args.threads,
-        args.config,
-        args.preset,
+        fasta=args.fasta,
+        bed=args.input_regions.name if args.input_regions else None,
+        ignore_bed=ignored_regions_file,
+        threads=args.threads,
+        cfg=args.config,
+        preset=args.preset,
     )
     tmpfile_ignored_regions.close()
 
