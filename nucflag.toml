@@ -12,19 +12,16 @@ n_zscores_false_dupe = 2.0
 
 [mismatch]
 n_zscores_high = 3.4
-ratio_het = 0.5
+ratio_het = 0.34
 
 [indel]
 n_zscores_high = 3.4
 ratio_indel = 0.5
-rolling_mean_window = 3
 
 [softclip]
 n_zscores_high = 3.4
 ratio_softclip = 0.5
 
 [group_by_ani]
-window_size = 2_000
-band_size = 31
-thr_dt_ident = 0.05
+window_size = 5_000
 min_grp_size = 50000
