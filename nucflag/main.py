@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 import os
 import sys
-import logging
 import time
+import logging
+import tomllib
 import tempfile
 import argparse
+from intervaltree import Interval
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 
 import polars as pl
 import matplotlib.pyplot as plt
-
-from intervaltree import Interval
 
 from .plot import plot_coverage
 from .io import (
@@ -21,7 +21,7 @@ from .io import (
 )
 from .region import Region, add_bin_overlay_region, add_mapq_overlay_region
 
-from py_nucflag import run_nucflag
+from py_nucflag import run_nucflag_itv, get_regions
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -34,6 +34,8 @@ logging.basicConfig(
 
 # Create the logger
 logger = logging.getLogger(__name__)
+
+DEFAULT_WG_WINDOW = 10_000_000
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,14 +90,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-t",
         "--threads",
-        default=4,
+        default=2,
         type=int,
         help="Threads for nucflag classification.",
     )
     parser.add_argument(
         "-p",
         "--processes",
-        default=4,
+        default=8,
         type=int,
         help="Processes for plotting.",
     )
@@ -136,44 +138,64 @@ def parse_args() -> argparse.Namespace:
 
 
 def plot_misassemblies(
-    itv: Interval,
-    df_cov: pl.DataFrame | None,
-    df_misasm: pl.DataFrame,
+    aln: str,
+    fasta: str | None,
+    itv: tuple[int, int, str],
+    ignore_bed: str,
+    threads: int,
+    config: str | None,
+    preset: str | None,
     overlay_regions: OrderedDict[str, set[Region]],
     plot_dir: str | None,
     cov_dir: str | None,
     add_builtin_tracks: set[str],
 ) -> pl.DataFrame:
+    # Detect misassemblies and return object with cov pileup and regions.
+    res = run_nucflag_itv(
+        aln,
+        itv=itv,
+        fasta=fasta,
+        ignore_bed=ignore_bed,
+        threads=threads,
+        cfg=config,
+        preset=preset,
+    )
+    st, end, ctg = itv
+    ctg_coords = f"{ctg}:{st}-{end}"
+
     # Plot contig.
-    if plot_dir and isinstance(df_cov, pl.DataFrame):
+    if plot_dir and isinstance(res.cov, pl.DataFrame):
         if "mapq" in add_builtin_tracks:
-            logger.info(f"Adding mapq track for {itv.data}.")
+            logger.info(f"Adding mapq track for {ctg_coords}.")
             overlay_regions["mapq"] = set(
-                add_mapq_overlay_region(itv.data, df_cov.select("pos", "mapq"))
+                add_mapq_overlay_region(ctg, res.cov.select("pos", "mapq"))
             )
 
         if "bin" in add_builtin_tracks:
-            logger.info(f"Adding bin track for {itv.data}.")
+            logger.info(f"Adding bin track for {ctg_coords}.")
             overlay_regions["bin"] = set(
-                add_bin_overlay_region(itv.data, df_cov.select("pos", "bin"))
+                add_bin_overlay_region(ctg, res.cov.select("pos", "bin"))
             )
 
-        logger.info(f"Plotting {itv.data}.")
+        logger.info(f"Plotting {ctg_coords}.")
         _ = plot_coverage(
-            itv=itv, df_cov=df_cov, df_misasm=df_misasm, overlay_regions=overlay_regions
+            itv=Interval(st, end, ctg),
+            df_cov=res.cov,
+            df_misasm=res.regions,
+            overlay_regions=overlay_regions,
         )
 
-        output_plot = os.path.join(plot_dir, f"{itv.data}.png")
+        output_plot = os.path.join(plot_dir, f"{ctg_coords}.png")
         logger.info(f"Saving plot to {output_plot}.")
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
 
     # Output coverage.
-    if cov_dir and isinstance(df_cov, pl.DataFrame):
-        logger.info(f"Saving coverage data for {itv.data}.")
-        output_cov = os.path.join(cov_dir, f"{itv.data}.tsv.gz")
-        df_cov.write_csv(output_cov, include_header=True)
+    if cov_dir and isinstance(res.cov, pl.DataFrame):
+        output_cov = os.path.join(cov_dir, f"{ctg_coords}.tsv.gz")
+        logger.info(f"Saving coverage data for {output_cov}.")
+        res.cov.write_csv(output_cov, include_header=True)
 
-    return df_misasm
+    return res.regions
 
 
 def main() -> int:
@@ -184,14 +206,14 @@ def main() -> int:
         os.makedirs(args.output_cov_dir, exist_ok=True)
 
     # Load ignored regions.
-    ignored_regions_file = None
-    tmpfile_ignored_regions = tempfile.NamedTemporaryFile("wt")
+    ignore_bed = None
+    tmpfile_ignore_bed = tempfile.NamedTemporaryFile("wt")
     if args.ignore_regions:
         logger.info(f"Ignoring region(s) from {args.ignore_regions}.")
         with open(args.ignore_regions, "rt") as fh:
             for line in fh:
-                tmpfile_ignored_regions.write(line)
-        ignored_regions_file = tmpfile_ignored_regions
+                tmpfile_ignore_bed.write(line)
+        ignore_bed = tmpfile_ignore_bed
 
     # Load additional regions to overlay and ignore.
     if args.overlay_regions:
@@ -207,54 +229,70 @@ def main() -> int:
 
         # Write regions to tempfile.
         for rgn in additional_ignore_regions:
-            print(rgn.as_tsv(), file=tmpfile_ignored_regions)
+            print(rgn.as_tsv(), file=tmpfile_ignore_bed)
         # Toggle ignored regions if additional ones found in overlay bed.
-        if not ignored_regions_file and additional_ignore_regions:
-            ignored_regions_file = tmpfile_ignored_regions
+        if not ignore_bed and additional_ignore_regions:
+            ignore_bed = tmpfile_ignore_bed
     else:
         overlay_regions = defaultdict(OrderedDict)
 
-    logger.info(f"Running nucflag with {args.threads} threads.")
-    results = run_nucflag(
-        args.infile,
+    if args.config:
+        with open(args.config, "rb") as fh:
+            cfg = tomllib.load(fh)
+        cfg_general: dict = cfg.get("general", {})
+        window = cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
+        store_pileup = cfg_general.get("store_pileup")
+    else:
+        window = DEFAULT_WG_WINDOW
+        store_pileup = True
+
+    if not store_pileup and args.output_plot_dir:
+        raise ValueError("Storing pileup data is required to generate plots.")
+
+    regions: list[tuple[int, int, str]] = get_regions(
+        aln=args.infile,
         fasta=args.fasta,
         bed=args.input_regions.name if args.input_regions else None,
-        ignore_bed=ignored_regions_file,
-        threads=args.threads,
-        cfg=args.config,
-        preset=args.preset,
+        window=window,
     )
-    tmpfile_ignored_regions.close()
 
     # Tracks to add that are builtin to nucflag.
     # mapq/bins/...
     added_builtin_tracks = (
         set(args.add_builtin_tracks) if args.add_builtin_tracks else set()
     )
-
     dfs_regions: list[pl.DataFrame] = []
-    logger.info(f"Generating outputs with {args.processes} processes.")
+    logger.info(
+        f"Generating outputs with {args.processes} processes with nucflag running with {args.threads} threads."
+    )
     with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
-        plot_args = [
-            (
-                Interval(res.st, res.end, res.ctg),
-                res.cov,
-                res.regions,
-                overlay_regions.get(res.ctg, OrderedDict()),
+        all_args = [
+            [
+                args.infile,
+                args.fasta,
+                rgn,
+                ignore_bed,
+                args.threads,
+                args.config,
+                args.preset,
+                overlay_regions.get(rgn[2], OrderedDict()),
                 args.output_plot_dir,
                 args.output_cov_dir,
                 added_builtin_tracks,
-            )
-            for res in results
+            ]
+            for rgn in regions
         ]
         futures = [
-            (args[0].data, pool.submit(plot_misassemblies, *args)) for args in plot_args
+            (args[2][2], pool.submit(plot_misassemblies, *args)) for args in all_args
         ]
         for ctg, future in futures:
             if future.exception():
                 logger.error(f"Failed to plot {ctg} ({future.exception()})")
                 continue
             dfs_regions.append(future.result())
+
+    # Remove tempfile of ignored regions.
+    tmpfile_ignore_bed.close()
 
     logger.info(f"Writing region BED file to {args.output_regions.name}.")
     write_output(
