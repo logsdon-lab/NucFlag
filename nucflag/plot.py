@@ -35,7 +35,7 @@ def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
 
 def plot_coverage(
     itv: Interval,
-    df_cov: pl.DataFrame,
+    df_pileup: pl.DataFrame,
     df_misasm: pl.DataFrame,
     overlay_regions: OrderedDict[str, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
@@ -127,18 +127,18 @@ def plot_coverage(
         ax = axs[0]
 
     ax.plot(
-        df_cov["pos"],
-        df_cov["indel"],
+        df_pileup["pos"],
+        df_pileup["indel"],
         marker="o",
         linestyle="None",
         markersize=2,
         color="purple",
         label="Indels",
     )
-    if "mismatch" in df_cov.columns:
+    if "mismatch" in df_pileup.columns:
         ax.plot(
-            df_cov["pos"],
-            df_cov["mismatch"],
+            df_pileup["pos"],
+            df_pileup["mismatch"],
             marker="o",
             markersize=2,
             linestyle="None",
@@ -146,8 +146,8 @@ def plot_coverage(
             label="Mismatches",
         )
     ax.plot(
-        df_cov["pos"],
-        df_cov["cov"],
+        df_pileup["pos"],
+        df_pileup["cov"],
         marker="o",
         linestyle="None",
         markersize=2,
@@ -241,7 +241,7 @@ def plot_coverage(
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, df_cov["cov"].mean() * 3)
+    ax.set_ylim(0, df_pileup["cov"].mean() * 3)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
     ax.set_xticklabels(xlabels)

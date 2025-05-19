@@ -164,23 +164,23 @@ def plot_misassemblies(
     ctg_coords = f"{ctg}:{st}-{end}"
 
     # Plot contig.
-    if plot_dir and isinstance(res.cov, pl.DataFrame):
+    if plot_dir and isinstance(res.pileup, pl.DataFrame):
         if "mapq" in add_builtin_tracks:
             logger.info(f"Adding mapq track for {ctg_coords}.")
             overlay_regions["mapq"] = set(
-                add_mapq_overlay_region(ctg, res.cov.select("pos", "mapq"))
+                add_mapq_overlay_region(ctg, res.pileup.select("pos", "mapq"))
             )
 
         if "bin" in add_builtin_tracks:
             logger.info(f"Adding bin track for {ctg_coords}.")
             overlay_regions["bin"] = set(
-                add_bin_overlay_region(ctg, res.cov.select("pos", "bin"))
+                add_bin_overlay_region(ctg, res.pileup.select("pos", "bin"))
             )
 
         logger.info(f"Plotting {ctg_coords}.")
         _ = plot_coverage(
             itv=Interval(st, end, ctg),
-            df_cov=res.cov,
+            df_pileup=res.pileup,
             df_misasm=res.regions,
             overlay_regions=overlay_regions,
         )
@@ -190,10 +190,10 @@ def plot_misassemblies(
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
 
     # Output coverage.
-    if cov_dir and isinstance(res.cov, pl.DataFrame):
+    if cov_dir and isinstance(res.pileup, pl.DataFrame):
         output_cov = os.path.join(cov_dir, f"{ctg_coords}.tsv.gz")
         logger.info(f"Saving coverage data for {output_cov}.")
-        res.cov.write_csv(output_cov, include_header=True)
+        res.pileup.write_csv(output_cov, include_header=True)
 
     return res.regions
 
@@ -241,13 +241,8 @@ def main() -> int:
             cfg = tomllib.load(fh)
         cfg_general: dict = cfg.get("general", {})
         window = cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
-        store_pileup = cfg_general.get("store_pileup")
     else:
         window = DEFAULT_WG_WINDOW
-        store_pileup = True
-
-    if not store_pileup and args.output_plot_dir:
-        raise ValueError("Storing pileup data is required to generate plots.")
 
     regions: list[tuple[int, int, str]] = get_regions(
         aln=args.infile,
