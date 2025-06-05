@@ -1,8 +1,7 @@
 [general]
 verbose = true
-bp_merge = 50_000
+bp_merge = 1
 bp_wg_window = 10_000_000
-store_pileup = true
 
 [cov]
 n_zscores_low = 3.5
@@ -16,8 +15,10 @@ n_zscores_high = 3.5
 ratio_het = 0.2
 
 [indel]
-n_zscores_high = 5.0
-ratio_indel = 0.5
+n_zscores_high = 10.0
+min_ins_size = 500
+min_del_size = 500
+ratio_indel = 0.25
 
 [softclip]
 n_zscores_high = 3.5
@@ -29,6 +30,6 @@ min_grp_size = 100_000
 min_ident = 80.0
 
 [repeat]
-check_types = ["Misjoin", "Indel"]
+check_types = ["Misjoin", "Indel", "FalseDupe"]
 ratio_repeat = 0.5
-bp_extend = 2
+bp_extend = 5

@@ -21,7 +21,7 @@ from .io import (
 )
 from .region import Region, add_bin_overlay_region, add_mapq_overlay_region
 
-from py_nucflag import run_nucflag_itv, get_regions
+from py_nucflag import run_nucflag_itv, get_regions, print_config_from_preset
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -243,6 +243,9 @@ def main() -> int:
         window = cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
     else:
         window = DEFAULT_WG_WINDOW
+
+    # Print config to stderr.
+    print_config_from_preset(args.preset, args.config)
 
     regions: list[tuple[int, int, str]] = get_regions(
         aln=args.infile,
