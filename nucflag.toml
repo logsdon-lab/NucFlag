@@ -1,6 +1,6 @@
 [general]
 verbose = true
-bp_merge = 1
+bp_merge = 5_000
 bp_wg_window = 10_000_000
 
 [cov]
@@ -16,8 +16,8 @@ ratio_het = 0.2
 
 [indel]
 n_zscores_high = 10.0
-min_ins_size = 500
-min_del_size = 500
+min_ins_size = 20
+min_del_size = 20
 ratio_indel = 0.25
 
 [softclip]
