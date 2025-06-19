@@ -3,3 +3,4 @@ numpy==1.26.4
 polars==1.6.0
 intervaltree==3.1.0
 py_nucflag @ git+https://github.com/koisland/rs-nucflag.git#subdirectory=py
+pyBigWig==0.3.24

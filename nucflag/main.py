@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+import random
 import logging
 import tomllib
 import tempfile
@@ -17,6 +18,7 @@ from .plot import plot_coverage
 from .io import (
     read_overlay_regions,
     write_output,
+    write_bigwig,
     BED9_COLS,
 )
 from .region import Region, add_bin_overlay_region, add_mapq_overlay_region
@@ -69,9 +71,9 @@ def parse_args() -> argparse.Namespace:
         help="Output plot dir.",
     )
     parser.add_argument(
-        "--output_cov_dir",
+        "--output_pileup_dir",
         default=None,
-        help="Output coverage dir. Generates gzipped coverage bed files per region.",
+        help="Output pileup dir. Generates bigWig files per region.",
     )
     parser.add_argument(
         "-o",
@@ -128,6 +130,13 @@ def parse_args() -> argparse.Namespace:
         help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
     )
     parser.add_argument(
+        "--add_pileup_data",
+        nargs="*",
+        choices=["cov", "mismatch", "mapq", "indel", "softclip"],
+        default=["cov", "mismatch"],
+        help="Add these pileup data types as bigWigs to --output_pileup_dir.",
+    )
+    parser.add_argument(
         "--add_builtin_tracks",
         nargs="*",
         choices=["mapq", "bin"],
@@ -147,9 +156,15 @@ def plot_misassemblies(
     preset: str | None,
     overlay_regions: OrderedDict[str, set[Region]],
     plot_dir: str | None,
-    cov_dir: str | None,
+    pileup_dir: str | None,
+    add_pileup_data: set[str],
     add_builtin_tracks: set[str],
 ) -> pl.DataFrame:
+    # Safer logging. Each itv should be unique so no hash collisions?
+    random.seed(hash(itv))
+    wait_time = random.random()
+    time.sleep(wait_time)
+
     # Detect misassemblies and return object with cov pileup and regions.
     res = run_nucflag_itv(
         aln,
@@ -162,6 +177,7 @@ def plot_misassemblies(
     )
     st, end, ctg = itv
     ctg_coords = f"{ctg}:{st}-{end}"
+    ctg_coords_filesafe = f"{ctg}_{st}-{end}"
 
     # Plot contig.
     if plot_dir and isinstance(res.pileup, pl.DataFrame):
@@ -185,15 +201,19 @@ def plot_misassemblies(
             overlay_regions=overlay_regions,
         )
 
-        output_plot = os.path.join(plot_dir, f"{ctg_coords}.png")
+        output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.png")
         logger.info(f"Saving plot to {output_plot}.")
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
 
     # Output coverage.
-    if cov_dir and isinstance(res.pileup, pl.DataFrame):
-        output_cov = os.path.join(cov_dir, f"{ctg_coords}.tsv.gz")
-        logger.info(f"Saving coverage data for {output_cov}.")
-        res.pileup.write_csv(output_cov, include_header=True)
+    if pileup_dir and add_pileup_data:
+        logger.info(f"Saving pileup data for {ctg_coords} to {pileup_dir}.")
+        write_bigwig(
+            res.pileup,
+            chrom_lengths=f"{fasta}.fai",
+            columns=list(add_pileup_data),
+            output_dir=os.path.join(pileup_dir),
+        )
 
     return res.regions
 
@@ -202,8 +222,8 @@ def main() -> int:
     args = parse_args()
     if args.output_plot_dir:
         os.makedirs(args.output_plot_dir, exist_ok=True)
-    if args.output_cov_dir:
-        os.makedirs(args.output_cov_dir, exist_ok=True)
+    if args.output_pileup_dir:
+        os.makedirs(args.output_pileup_dir, exist_ok=True)
 
     # Load ignored regions.
     ignore_bed = None
@@ -259,35 +279,44 @@ def main() -> int:
     added_builtin_tracks = (
         set(args.add_builtin_tracks) if args.add_builtin_tracks else set()
     )
+    added_pileup_data = set(args.add_pileup_data) if args.add_pileup_data else set()
     dfs_regions: list[pl.DataFrame] = []
     logger.info(
         f"Generating outputs with {args.processes} processes with nucflag running with {args.threads} threads."
     )
-    with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
-        all_args = [
-            [
-                args.infile,
-                args.fasta,
-                rgn,
-                ignore_bed,
-                args.threads,
-                args.config,
-                args.preset,
-                overlay_regions.get(rgn[2], OrderedDict()),
-                args.output_plot_dir,
-                args.output_cov_dir,
-                added_builtin_tracks,
-            ]
-            for rgn in regions
+    all_args = [
+        [
+            args.infile,
+            args.fasta,
+            rgn,
+            ignore_bed,
+            args.threads,
+            args.config,
+            args.preset,
+            overlay_regions.get(rgn[2], OrderedDict()),
+            args.output_plot_dir,
+            args.output_pileup_dir,
+            added_pileup_data,
+            added_builtin_tracks,
         ]
-        futures = [
-            (args[2][2], pool.submit(plot_misassemblies, *args)) for args in all_args
-        ]
-        for ctg, future in futures:
-            if future.exception():
-                logger.error(f"Failed to plot {ctg} ({future.exception()})")
-                continue
-            dfs_regions.append(future.result())
+        for rgn in regions
+    ]
+    if args.processes == 1:
+        for a in all_args:
+            res = plot_misassemblies(*a)
+            dfs_regions.append(res)
+    else:
+        with ProcessPoolExecutor(
+            max_workers=args.processes, max_tasks_per_child=1
+        ) as pool:
+            futures = [(a[2][2], pool.submit(plot_misassemblies, *a)) for a in all_args]
+            for ctg, future in futures:
+                if future.exception():
+                    logger.error(
+                        f"Failed to write output for {ctg} ({future.exception()})"
+                    )
+                    continue
+                dfs_regions.append(future.result())
 
     # Remove tempfile of ignored regions.
     tmpfile_ignore_bed.close()

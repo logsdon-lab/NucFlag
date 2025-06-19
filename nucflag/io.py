@@ -1,7 +1,10 @@
+import os
 import logging
 from collections import OrderedDict, defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
+import pyBigWig
+import numpy as np
 import polars as pl
 from intervaltree import Interval
 
@@ -116,6 +119,33 @@ def read_overlay_regions(
                 overlay_regions[region.name][str(i)].add(region)
 
     return overlay_regions
+
+
+def write_bigwig(
+    df_pileup: pl.DataFrame, chrom_lengths: str, columns: list[str], output_dir: str
+):
+    chrom = df_pileup["chrom"][0]
+    if not os.path.exists(chrom_lengths):
+        logging.error(f"Require chrom lengths to generate bigWig for {chrom}.")
+        return
+
+    df_chrom_lengths = pl.read_csv(
+        chrom_lengths,
+        separator="\t",
+        has_header=False,
+        new_columns=["chrom", "length"],
+        columns=[0, 1],
+    ).filter(pl.col("chrom") == chrom)
+    position = df_pileup["pos"].to_numpy()
+
+    header = list(df_chrom_lengths.iter_rows())
+    for col in columns:
+        outfile = os.path.join(output_dir, f"{chrom}_{col}.bw")
+        with pyBigWig.open(outfile, "w") as bw:
+            # https://github.com/deeptools/pyBigWig/issues/126
+            bw.addHeader(header)
+            values = df_pileup[col].to_numpy().astype(np.float64)
+            bw.addEntries(chrom, position, values=values, span=1)
 
 
 def write_output(
