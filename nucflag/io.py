@@ -1,4 +1,6 @@
-import sys, os
+import os
+import sys
+import gzip
 from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
@@ -171,7 +173,9 @@ def write_misassemblies_and_status(
             ).is_empty():
                 region_status.append((region, start, end, str(RegionStatus.GOOD)))
             else:
-                region_status.append((region, start, end, str(RegionStatus.MISASSEMBLED)))
+                region_status.append(
+                    (region, start, end, str(RegionStatus.MISASSEMBLED))
+                )
 
         df_asm_status = pl.DataFrame(
             region_status, orient="row", schema=["contig", "start", "end", "status"]
@@ -182,22 +186,26 @@ def write_misassemblies_and_status(
 
 
 def write_bigwig(
-    contig: str, df_pileup: pl.DataFrame, contig_lengths: str, columns: list[str], output_prefix: str
+    contig: str,
+    df_pileup: pl.DataFrame,
+    contig_lengths: str,
+    columns: list[str],
+    output_prefix: str,
 ):
     start = df_pileup["position"][0]
     if not contig_lengths or not os.path.exists(contig_lengths):
-        sys.stderr.write(f"Chrom lengths needed to generate bigWig for {contig}. Generating wig files.\n")
+        sys.stderr.write(
+            f"Chrom lengths needed to generate bigWig for {contig}. Generating wig files.\n"
+        )
         for col in columns:
-            outfile = f"{output_prefix}_{col}.wig"
-            try:
-                os.remove(outfile)
-            except FileNotFoundError:
-                pass
-            header=f'fixedStep chrom={contig} start={start} step=1'
-            with open(outfile, "at") as w:
-                print(header, file=w)
-                df_values = df_pileup.select(col).cast({col: pl.Float64})
-                df_values.write_csv(w, include_header=False)
+            outfile = f"{output_prefix}_{col}.wig.gz"
+            with gzip.open(outfile, "wb") as fh:
+                df_values = (
+                    df_pileup.select(col)
+                    .cast({col: pl.Float64})
+                    .rename({col: f"fixedStep chrom={contig} start={start} step=1"})
+                )
+                df_values.write_csv(fh, include_header=True)
     else:
         df_contig_lengths = pl.read_csv(
             contig_lengths,
