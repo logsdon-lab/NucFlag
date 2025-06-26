@@ -129,16 +129,16 @@ def test_identify_misassemblies(
             "test/misjoin/region.bed",
             None,
             [
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig",
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
             ],
             [
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig",
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
             ],
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
-    ]
+    ],
 )
 def test_generate_bigwig(
     bam: str,
@@ -162,12 +162,14 @@ def test_generate_bigwig(
         *config,
     ]
     if chrom_sizes:
-        args.extend([
-            "--chrom_sizes",
-            chrom_sizes,
-        ])
+        args.extend(
+            [
+                "--chrom_sizes",
+                chrom_sizes,
+            ]
+        )
 
-    process = subprocess.run(
+    subprocess.run(
         args,
         capture_output=True,
         check=True,
@@ -184,6 +186,7 @@ def test_generate_bigwig(
             os.remove(file)
         except FileNotFoundError:
             pass
+
 
 # Check that providing no bai produces non-zero exit code.
 def test_bam_idx_check():
