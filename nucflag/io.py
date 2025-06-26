@@ -165,18 +165,16 @@ def write_misassemblies_and_status(
         region_status = []
         # If only HETs, consider correctly assembled.
         for region, start, end in regions:
-            df_misasm_ctg = df_misasm.filter(
-                pl.col("contig") == f"{region}:{start}-{end}"
-            )
+            df_misasm_ctg = df_misasm.filter(pl.col("contig") == region)
             if df_misasm_ctg.filter(
                 pl.col("misassembly") != str(Misassembly.HET)
             ).is_empty():
-                region_status.append((region, start, end, RegionStatus.GOOD))
+                region_status.append((region, start, end, str(RegionStatus.GOOD)))
             else:
-                region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
+                region_status.append((region, start, end, str(RegionStatus.MISASSEMBLED)))
 
         df_asm_status = pl.DataFrame(
-            region_status, schema=["contig", "start", "end", "status"]
+            region_status, orient="row", schema=["contig", "start", "end", "status"]
         )
         df_asm_status.sort(by=["contig", "start"]).write_csv(
             output_status, include_header=False, separator="\t"
