@@ -107,6 +107,84 @@ def test_identify_misassemblies(
     )
 
 
+@pytest.mark.parametrize(
+    ["bam", "bed", "chrom_sizes", "outfiles", "expected", "config"],
+    [
+        (
+            "test/misjoin/HG00171_hifi.bam",
+            "test/misjoin/region.bed",
+            "test/bigwig/chrom_sizes.tsv",
+            [
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+            ],
+            [
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+            ],
+            tuple(["-c", "test/misjoin/config_perc.toml"]),
+        ),
+        (
+            "test/misjoin/HG00171_hifi.bam",
+            "test/misjoin/region.bed",
+            None,
+            [
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig",
+            ],
+            [
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig",
+            ],
+            tuple(["-c", "test/misjoin/config_perc.toml"]),
+        ),
+    ]
+)
+def test_generate_bigwig(
+    bam: str,
+    bed: str,
+    chrom_sizes: str | None,
+    outfiles: list[str],
+    expected: list[str],
+    config: tuple[str],
+):
+    outdir = os.path.dirname(outfiles[0])
+    args = [
+        "python",
+        "-m",
+        "nucflag.main",
+        "-i",
+        bam,
+        "-b",
+        bed,
+        "--output_cov_dir",
+        outdir,
+        *config,
+    ]
+    if chrom_sizes:
+        args.extend([
+            "--chrom_sizes",
+            chrom_sizes,
+        ])
+
+    process = subprocess.run(
+        args,
+        capture_output=True,
+        check=True,
+    )
+    for o, e in zip(outfiles, expected):
+        with (
+            open(o, "rb") as ofh,
+            open(e, "rb") as efh,
+        ):
+            assert ofh.read() == efh.read(), f"Files {o} != {e}."
+
+    for file in outfiles:
+        try:
+            os.remove(file)
+        except FileNotFoundError:
+            pass
+
 # Check that providing no bai produces non-zero exit code.
 def test_bam_idx_check():
     infile = "test/no_bai/null.bam"

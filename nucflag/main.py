@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_cov_dir",
         default=None,
-        help="Output coverage dir. Generates gzipped coverage bed files per region.",
+        help="Output coverage dir. Generates wig or bigwig files per region.",
     )
     parser.add_argument(
         "-o",
@@ -93,6 +93,12 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         type=argparse.FileType("rt"),
         help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
+    )
+    parser.add_argument(
+        "--chrom_sizes",
+        default=None,
+        type=str,
+        help="Chromosome sizes TSV file for bigWig files. Expects at minimum chrom and its length. If not provided, wig files are produced with --output_cov_dir."
     )
     parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
     return parser.parse_args()
@@ -165,6 +171,7 @@ def main() -> int:
     # for region in regions:
     #     res.append(classify_plot_assembly(
     #         args.infile,
+    #         args.chrom_sizes,
     #         args.output_plot_dir,
     #         args.output_cov_dir,
     #         args.threads,
@@ -184,6 +191,7 @@ def main() -> int:
                 *[
                     (
                         args.infile,
+                        args.chrom_sizes,
                         args.output_plot_dir,
                         args.output_cov_dir,
                         args.threads,
@@ -204,7 +212,6 @@ def main() -> int:
         regions,
         args.output_misasm,
         args.output_status,
-        bed_provided=bool(args.input_regions),
     )
 
     return 0

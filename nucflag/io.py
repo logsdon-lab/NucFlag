@@ -1,10 +1,11 @@
-import sys
+import sys, os
 from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
 import polars as pl
 import numpy as np
 import pysam
+import pyBigWig
 from intervaltree import Interval
 
 from .config import DEF_CONFIG
@@ -145,8 +146,6 @@ def write_misassemblies_and_status(
     regions: Iterable[tuple[str, int, int]],
     output_misasm: TextIO,
     output_status: TextIO | None,
-    *,
-    bed_provided: bool,
 ):
     try:
         df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
@@ -154,9 +153,7 @@ def write_misassemblies_and_status(
         df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
 
     df_misasm = df_misasm.with_columns(
-        contig=pl.when(bed_provided)
-        .then(pl.col("contig"))
-        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+        contig=pl.col("contig").str.replace(r":\d+-\d+$", "")
     )
 
     df_misasm.sort(by=["contig", "start"]).write_csv(
@@ -184,3 +181,39 @@ def write_misassemblies_and_status(
         df_asm_status.sort(by=["contig", "start"]).write_csv(
             output_status, include_header=False, separator="\t"
         )
+
+
+def write_bigwig(
+    contig: str, df_pileup: pl.DataFrame, contig_lengths: str, columns: list[str], output_prefix: str
+):
+    start = df_pileup["position"][0]
+    if not contig_lengths or not os.path.exists(contig_lengths):
+        sys.stderr.write(f"Chrom lengths needed to generate bigWig for {contig}. Generating wig files.\n")
+        for col in columns:
+            outfile = f"{output_prefix}_{col}.wig"
+            try:
+                os.remove(outfile)
+            except FileNotFoundError:
+                pass
+            header=f'fixedStep chrom={contig} start={start} step=1'
+            with open(outfile, "at") as w:
+                print(header, file=w)
+                df_values = df_pileup.select(col).cast({col: pl.Float64})
+                df_values.write_csv(w, include_header=False)
+    else:
+        df_contig_lengths = pl.read_csv(
+            contig_lengths,
+            separator="\t",
+            has_header=False,
+            new_columns=["contig", "length"],
+            columns=[0, 1],
+        ).filter(pl.col("contig") == contig)
+
+        header = list(df_contig_lengths.iter_rows())
+        for col in columns:
+            outfile = f"{output_prefix}_{col}.bw"
+            with pyBigWig.open(outfile, "w") as bw:
+                # https://github.com/deeptools/pyBigWig/issues/126
+                bw.addHeader(header)
+                values = df_pileup[col].to_numpy().astype(np.float64)
+                bw.addEntries(contig, start, values=values, span=1, step=1)
