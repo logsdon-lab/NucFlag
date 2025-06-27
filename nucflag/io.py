@@ -70,7 +70,9 @@ def read_asm_regions(
                 yield (ref, final_start, final_start + rem)
 
 
-def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
+def read_regions(
+    bed_file: TextIO, default_actions_str: str | None = None
+) -> Generator[Region, None, None]:
     for i, line in enumerate(read_bed_file(bed_file)):
         ctg, start, end, other = line
         try:
@@ -78,39 +80,43 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
         except IndexError:
             desc = None
         try:
-            actions_str = other[1]
-            # Split actions column.
-            for action_str in actions_str.split(","):
-                action_desc: IgnoreOpt | str | None
-                action_opt, _, action_desc = action_str.partition(":")
-                try:
-                    action_opt = ActionOpt(action_opt)
-                except ValueError:
-                    sys.stderr.write(
-                        f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}.\n"
-                    )
-                    action_opt = ActionOpt.NOOP
-
-                if action_opt == ActionOpt.IGNORE:
-                    action_desc = IgnoreOpt(action_desc)
-                elif action_opt == ActionOpt.PLOT:
-                    action_desc = action_desc
-                else:
-                    action_desc = None
-
-                yield Region(
-                    name=ctg,
-                    region=Interval(start, end),
-                    desc=desc,
-                    action=Action(action_opt, action_desc),
-                )
+            actions_str: str | None = other[1]
         except IndexError:
+            actions_str = default_actions_str
+
+        if not actions_str:
             continue
+
+        # Split actions column.
+        for action_str in actions_str.split(","):
+            action_desc: IgnoreOpt | str | None
+            action_opt, _, action_desc = action_str.partition(":")
+            try:
+                action_opt = ActionOpt(action_opt)
+            except ValueError:
+                sys.stderr.write(
+                    f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}.\n"
+                )
+                action_opt = ActionOpt.NOOP
+
+            if action_opt == ActionOpt.IGNORE:
+                action_desc = IgnoreOpt(action_desc)
+            elif action_opt == ActionOpt.PLOT:
+                action_desc = action_desc
+            else:
+                action_desc = None
+
+            yield Region(
+                name=ctg,
+                region=Interval(start, end),
+                desc=desc,
+                action=Action(action_opt, action_desc),
+            )
 
 
 def read_ignored_regions(infile: TextIO) -> DefaultDict[str, set[Region]]:
     ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
-    for region in read_regions(infile):
+    for region in read_regions(infile, default_actions_str="ignore:absolute"):
         if region.action and region.action.opt == ActionOpt.IGNORE:
             ignored_regions[region.name].add(region)
 

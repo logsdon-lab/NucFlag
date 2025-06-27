@@ -1,3 +1,4 @@
+import gzip
 import os
 import subprocess
 
@@ -169,15 +170,13 @@ def test_generate_bigwig(
             ]
         )
 
-    subprocess.run(
-        args,
-        capture_output=True,
-        check=True,
-    )
+    subprocess.run(args, check=True)
+
     for o, e in zip(outfiles, expected):
+        fn_open = gzip.open if o.endswith(".gz") else open
         with (
-            open(o, "rb") as ofh,
-            open(e, "rb") as efh,
+            fn_open(o, "rb") as ofh,  # type: ignore[operator]
+            fn_open(e, "rb") as efh,  # type: ignore[operator]
         ):
             assert ofh.read() == efh.read(), f"Files {o} != {e}."
 
