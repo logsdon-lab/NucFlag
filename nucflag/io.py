@@ -1,10 +1,13 @@
+import os
 import sys
+import gzip
 from collections import defaultdict
 from typing import DefaultDict, Generator, Iterable, TextIO
 
 import polars as pl
 import numpy as np
 import pysam
+import pyBigWig
 from intervaltree import Interval
 
 from .config import DEF_CONFIG
@@ -67,7 +70,9 @@ def read_asm_regions(
                 yield (ref, final_start, final_start + rem)
 
 
-def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
+def read_regions(
+    bed_file: TextIO, default_actions_str: str | None = None
+) -> Generator[Region, None, None]:
     for i, line in enumerate(read_bed_file(bed_file)):
         ctg, start, end, other = line
         try:
@@ -75,39 +80,43 @@ def read_regions(bed_file: TextIO) -> Generator[Region, None, None]:
         except IndexError:
             desc = None
         try:
-            actions_str = other[1]
-            # Split actions column.
-            for action_str in actions_str.split(","):
-                action_desc: IgnoreOpt | str | None
-                action_opt, _, action_desc = action_str.partition(":")
-                try:
-                    action_opt = ActionOpt(action_opt)
-                except ValueError:
-                    sys.stderr.write(
-                        f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}.\n"
-                    )
-                    action_opt = ActionOpt.NOOP
-
-                if action_opt == ActionOpt.IGNORE:
-                    action_desc = IgnoreOpt(action_desc)
-                elif action_opt == ActionOpt.PLOT:
-                    action_desc = action_desc
-                else:
-                    action_desc = None
-
-                yield Region(
-                    name=ctg,
-                    region=Interval(start, end),
-                    desc=desc,
-                    action=Action(action_opt, action_desc),
-                )
+            actions_str: str | None = other[1]
         except IndexError:
+            actions_str = default_actions_str
+
+        if not actions_str:
             continue
+
+        # Split actions column.
+        for action_str in actions_str.split(","):
+            action_desc: IgnoreOpt | str | None
+            action_opt, _, action_desc = action_str.partition(":")
+            try:
+                action_opt = ActionOpt(action_opt)
+            except ValueError:
+                sys.stderr.write(
+                    f"Unknown action option ({action_opt}) on line {i} in {bed_file.name}.\n"
+                )
+                action_opt = ActionOpt.NOOP
+
+            if action_opt == ActionOpt.IGNORE:
+                action_desc = IgnoreOpt(action_desc)
+            elif action_opt == ActionOpt.PLOT:
+                action_desc = action_desc
+            else:
+                action_desc = None
+
+            yield Region(
+                name=ctg,
+                region=Interval(start, end),
+                desc=desc,
+                action=Action(action_opt, action_desc),
+            )
 
 
 def read_ignored_regions(infile: TextIO) -> DefaultDict[str, set[Region]]:
     ignored_regions: DefaultDict[str, set[Region]] = defaultdict(set)
-    for region in read_regions(infile):
+    for region in read_regions(infile, default_actions_str="ignore:absolute"):
         if region.action and region.action.opt == ActionOpt.IGNORE:
             ignored_regions[region.name].add(region)
 
@@ -145,8 +154,6 @@ def write_misassemblies_and_status(
     regions: Iterable[tuple[str, int, int]],
     output_misasm: TextIO,
     output_status: TextIO | None,
-    *,
-    bed_provided: bool,
 ):
     try:
         df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
@@ -154,9 +161,7 @@ def write_misassemblies_and_status(
         df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
 
     df_misasm = df_misasm.with_columns(
-        contig=pl.when(bed_provided)
-        .then(pl.col("contig"))
-        .otherwise(pl.col("contig").str.replace(r":\d+-\d+$", ""))
+        contig=pl.col("contig").str.replace(r":\d+-\d+$", "")
     )
 
     df_misasm.sort(by=["contig", "start"]).write_csv(
@@ -168,19 +173,59 @@ def write_misassemblies_and_status(
         region_status = []
         # If only HETs, consider correctly assembled.
         for region, start, end in regions:
-            df_misasm_ctg = df_misasm.filter(
-                pl.col("contig") == f"{region}:{start}-{end}"
-            )
+            df_misasm_ctg = df_misasm.filter(pl.col("contig") == region)
             if df_misasm_ctg.filter(
                 pl.col("misassembly") != str(Misassembly.HET)
             ).is_empty():
-                region_status.append((region, start, end, RegionStatus.GOOD))
+                region_status.append((region, start, end, str(RegionStatus.GOOD)))
             else:
-                region_status.append((region, start, end, RegionStatus.MISASSEMBLED))
+                region_status.append(
+                    (region, start, end, str(RegionStatus.MISASSEMBLED))
+                )
 
         df_asm_status = pl.DataFrame(
-            region_status, schema=["contig", "start", "end", "status"]
+            region_status, orient="row", schema=["contig", "start", "end", "status"]
         )
         df_asm_status.sort(by=["contig", "start"]).write_csv(
             output_status, include_header=False, separator="\t"
         )
+
+
+def write_bigwig(
+    contig: str,
+    df_pileup: pl.DataFrame,
+    contig_lengths: str,
+    columns: list[str],
+    output_prefix: str,
+):
+    start = df_pileup["position"][0]
+    if not contig_lengths or not os.path.exists(contig_lengths):
+        sys.stderr.write(
+            f"Chrom lengths needed to generate bigWig for {contig}. Generating wig files.\n"
+        )
+        for col in columns:
+            outfile = f"{output_prefix}_{col}.wig.gz"
+            with gzip.open(outfile, "wb") as fh:
+                df_values = (
+                    df_pileup.select(col)
+                    .cast({col: pl.Float64})
+                    .rename({col: f"fixedStep chrom={contig} start={start} step=1"})
+                )
+                df_values.write_csv(fh, include_header=True)
+    else:
+        df_contig_lengths = pl.read_csv(
+            contig_lengths,
+            separator="\t",
+            has_header=False,
+            new_columns=["contig", "length"],
+            columns=[0, 1],
+        ).filter(pl.col("contig") == contig)
+
+        header = list(df_contig_lengths.iter_rows())
+        for col in columns:
+            outfile = f"{output_prefix}_{col}.bw"
+            with pyBigWig.open(outfile, "w") as bw:
+                # https://github.com/deeptools/pyBigWig/issues/126
+                bw.addHeader(header)
+                values = df_pileup[col].to_numpy().astype(np.float64)
+                bw.addEntries(contig, start, values=values, span=1, step=1)

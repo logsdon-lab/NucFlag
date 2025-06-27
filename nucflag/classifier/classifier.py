@@ -16,7 +16,7 @@ from .collapse import get_secondary_allele_coords, identify_collapses
 from .misjoin import identify_misjoins, identify_zero_cov_regions
 from .common import peak_finder, filter_interval_expr
 from ..utils import check_bam_indexed
-from ..io import get_coverage_by_base
+from ..io import get_coverage_by_base, write_bigwig
 from ..misassembly import Misassembly
 from ..plot import plot_coverage
 from ..region import Region, update_relative_ignored_regions
@@ -197,6 +197,7 @@ def classify_misassemblies(
 
 def classify_plot_assembly(
     infile: str,
+    chrom_sizes: str | None,
     output_dir: str | None,
     output_cov_dir: str | None,
     threads: int,
@@ -256,17 +257,10 @@ def classify_plot_assembly(
         plt.savefig(output_plot, dpi=PLOT_DPI, bbox_inches="tight")
 
     if output_cov_dir:
-        sys.stderr.write(f"Writing coverage bed file for {contig_name}.\n")
-
-        output_bed = os.path.join(output_cov_dir, f"{contig_name}.bed")
-        df_group_labeled.write_csv(output_bed, separator="\t")
-
-        sys.stderr.write(f"Compressing coverage bed file for {contig_name}.\n")
-        with open(output_bed, "rb") as f_in:
-            with gzip.open(f"{output_bed}.gz", "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
-
-        os.remove(output_bed)
+        sys.stderr.write(f"Writing coverage files for {contig_name}.\n")
+        write_bigwig(
+            contig, df_group_labeled, chrom_sizes, columns=["first", "second"], output_prefix=os.path.join(output_cov_dir, contig_name)
+        )
 
     del df_group_labeled
 

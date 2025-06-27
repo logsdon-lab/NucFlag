@@ -1,3 +1,4 @@
+import gzip
 import os
 import subprocess
 
@@ -105,6 +106,85 @@ def test_identify_misassemblies(
         *config,
         expected_output=expected_outputs,
     )
+
+
+@pytest.mark.parametrize(
+    ["bam", "bed", "chrom_sizes", "outfiles", "expected", "config"],
+    [
+        (
+            "test/misjoin/HG00171_hifi.bam",
+            "test/misjoin/region.bed",
+            "test/bigwig/chrom_sizes.tsv",
+            [
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+            ],
+            [
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+            ],
+            tuple(["-c", "test/misjoin/config_perc.toml"]),
+        ),
+        (
+            "test/misjoin/HG00171_hifi.bam",
+            "test/misjoin/region.bed",
+            None,
+            [
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
+            ],
+            [
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
+            ],
+            tuple(["-c", "test/misjoin/config_perc.toml"]),
+        ),
+    ],
+)
+def test_generate_bigwig(
+    bam: str,
+    bed: str,
+    chrom_sizes: str | None,
+    outfiles: list[str],
+    expected: list[str],
+    config: tuple[str],
+):
+    outdir = os.path.dirname(outfiles[0])
+    args = [
+        "python",
+        "-m",
+        "nucflag.main",
+        "-i",
+        bam,
+        "-b",
+        bed,
+        "--output_cov_dir",
+        outdir,
+        *config,
+    ]
+    if chrom_sizes:
+        args.extend(
+            [
+                "--chrom_sizes",
+                chrom_sizes,
+            ]
+        )
+
+    subprocess.run(args, check=True)
+
+    for o, e in zip(outfiles, expected):
+        fn_open = gzip.open if o.endswith(".gz") else open
+        with (
+            fn_open(o, "rb") as ofh,  # type: ignore[operator]
+            fn_open(e, "rb") as efh,  # type: ignore[operator]
+        ):
+            assert ofh.read() == efh.read(), f"Files {o} != {e}."
+
+    for file in outfiles:
+        try:
+            os.remove(file)
+        except FileNotFoundError:
+            pass
 
 
 # Check that providing no bai produces non-zero exit code.
