@@ -1,6 +1,4 @@
-import gzip
 import os
-import shutil
 import sys
 from collections import defaultdict
 from typing import Any
@@ -207,6 +205,7 @@ def classify_plot_assembly(
     config: dict[str, Any],
     overlay_regions: defaultdict[int, set[Region]] | None,
     ignored_regions: set[Region],
+    ylim: float | int,
 ) -> pl.DataFrame:
     contig_name = f"{contig}:{start}-{end}"
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
@@ -225,7 +224,7 @@ def classify_plot_assembly(
                 "first": cov_first_second[0],
                 "second": cov_first_second[1],
             },
-            schema={"position": pl.Int64, "first": pl.Int16, "second": pl.Int16},
+            schema={"position": pl.UInt64, "first": pl.UInt32, "second": pl.UInt32},
         )
         del cov_first_second
     except ValueError:
@@ -233,7 +232,7 @@ def classify_plot_assembly(
             infile,
             separator="\t",
             has_header=True,
-            dtypes={"position": pl.Int64, "first": pl.Int16, "second": pl.Int16},
+            dtypes={"position": pl.UInt64, "first": pl.UInt32, "second": pl.UInt32},
         )
 
     # Update ignored regions if relative.
@@ -249,7 +248,9 @@ def classify_plot_assembly(
     del df
 
     if output_dir:
-        _ = plot_coverage(df_group_labeled, misassemblies, contig, overlay_regions)
+        _ = plot_coverage(
+            df_group_labeled, misassemblies, contig, overlay_regions, ylim
+        )
 
         sys.stderr.write(f"Plotting {contig_name}.\n")
 
@@ -259,7 +260,11 @@ def classify_plot_assembly(
     if output_cov_dir:
         sys.stderr.write(f"Writing coverage files for {contig_name}.\n")
         write_bigwig(
-            contig, df_group_labeled, chrom_sizes, columns=["first", "second"], output_prefix=os.path.join(output_cov_dir, contig_name)
+            contig,
+            df_group_labeled,
+            chrom_sizes,
+            columns=["first", "second"],
+            output_prefix=os.path.join(output_cov_dir, contig_name),
         )
 
     del df_group_labeled

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import io
 import os
+import ast
 import sys
 import pprint
 import argparse
@@ -98,7 +99,13 @@ def parse_args() -> argparse.Namespace:
         "--chrom_sizes",
         default=None,
         type=str,
-        help="Chromosome sizes TSV file for bigWig files. Expects at minimum chrom and its length. If not provided, wig files are produced with --output_cov_dir."
+        help="Chromosome sizes TSV file for bigWig files. Expects at minimum chrom and its length. If not provided, wig files are produced with --output_cov_dir.",
+    )
+    parser.add_argument(
+        "--ylim",
+        default=100,
+        type=ast.literal_eval,
+        help="Plot y-axis limit. If float, used as a scaling factor from mean. (ex. 3.0 is mean times 3)",
     )
     parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
     return parser.parse_args()
@@ -110,6 +117,9 @@ def main() -> int:
         os.makedirs(args.output_plot_dir, exist_ok=True)
     if args.output_cov_dir:
         os.makedirs(args.output_cov_dir, exist_ok=True)
+
+    if not (isinstance(args.ylim, float) or isinstance(args.ylim, int)):
+        raise ValueError(f"y-axis limit must be float or int. {args.ylim}")
 
     if isinstance(args.config, io.IOBase):
         config = tomllib.load(args.config)
@@ -179,6 +189,7 @@ def main() -> int:
     #         config,
     #         overlay_regions.get(region[0]),
     #         ignored_regions.get("all", set()).union(ignored_regions.get(region[0], set())),
+    #         args.ylim,
     #     ))
 
     # Use new process pool, which doesn't cause a memory leak.
@@ -201,6 +212,7 @@ def main() -> int:
                         ignored_regions.get("all", set()).union(
                             ignored_regions.get(region[0], set())
                         ),
+                        args.ylim,
                     )
                     for region in regions
                 ]
