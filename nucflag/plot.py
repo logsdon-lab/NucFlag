@@ -1,3 +1,4 @@
+import sys
 import warnings
 from typing import Any, DefaultDict
 
@@ -38,6 +39,7 @@ def plot_coverage(
     misassemblies: dict[Misassembly, IntervalTree],
     contig_name: str,
     overlay_regions: DefaultDict[int, set[Region]] | None,
+    ylim: float | int = 100,
 ) -> tuple[plt.Figure, Any]:
     region_bounds = Interval(df["position"].min(), df["position"].max())
 
@@ -216,7 +218,17 @@ def plot_coverage(
         xlabels = [format((label - subval) / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, PLOT_YLIM)
+    if isinstance(ylim, float):
+        plot_ylim = df["first"].mean() * ylim
+    elif isinstance(ylim, int):
+        plot_ylim = ylim
+    else:
+        sys.stderr.write(
+            f"Invalid {ylim} of type {type(ylim)}. Defaulting to {PLOT_YLIM}.\n"
+        )
+        plot_ylim = PLOT_YLIM
+
+    ax.set_ylim(0, plot_ylim)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel("Sequence read depth", fontweight="bold")
     ax.set_xticklabels(xlabels)

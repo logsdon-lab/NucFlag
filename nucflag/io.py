@@ -194,7 +194,7 @@ def write_misassemblies_and_status(
 def write_bigwig(
     contig: str,
     df_pileup: pl.DataFrame,
-    contig_lengths: str,
+    contig_lengths: str | None,
     columns: list[str],
     output_prefix: str,
 ):

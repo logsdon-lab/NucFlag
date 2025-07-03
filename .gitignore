@@ -11,3 +11,4 @@ exp/
 .snakemake
 *.egg-info
 .nucflag
+HG002
