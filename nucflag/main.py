@@ -117,7 +117,8 @@ def main() -> int:
         os.makedirs(args.output_plot_dir, exist_ok=True)
     if args.output_cov_dir:
         os.makedirs(args.output_cov_dir, exist_ok=True)
-    if not isinstance(args.ylim, float) or isinstance(args.ylim, int):
+
+    if not (isinstance(args.ylim, float) or isinstance(args.ylim, int)):
         raise ValueError(f"y-axis limit must be float or int. {args.ylim}")
 
     if isinstance(args.config, io.IOBase):
