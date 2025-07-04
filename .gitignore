@@ -13,3 +13,4 @@ exp/
 Snakefile
 results/
 *.xml
+igv/

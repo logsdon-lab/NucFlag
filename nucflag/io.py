@@ -32,6 +32,9 @@ STATUSES = [
     "collapse",
     "misjoin",
     "false_dupe",
+    "repeat",
+    "homopolymer",
+    "scaffold",
 ]
 
 

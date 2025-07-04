@@ -107,7 +107,7 @@ def parse_args() -> argparse.Namespace:
         "-x",
         "--preset",
         default=None,
-        choices=["ont_r9", "hifi"],
+        choices=["ont_r9", "ont_r10", "hifi"],
         help="Sequencing data specific preset.",
     )
     parser.add_argument(
