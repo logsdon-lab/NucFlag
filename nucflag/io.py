@@ -8,11 +8,10 @@ import polars as pl
 import numpy as np
 import pysam
 import pyBigWig
-from intervaltree import Interval
+from intervaltree import Interval, IntervalTree
 
 from .config import DEF_CONFIG
 from .utils import check_bam_indexed
-from .misassembly import Misassembly
 from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
 
 
@@ -149,34 +148,46 @@ def read_overlay_regions(
     return overlay_regions
 
 
-def write_misassemblies_and_status(
-    dfs_misasm: Iterable[pl.DataFrame],
+def write_aggregated_misassemblies_and_status(
     regions: Iterable[tuple[str, int, int]],
-    output_misasm: TextIO,
+    output_misasm: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
 ):
-    try:
-        df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
-    except ValueError:
-        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
+    if isinstance(output_misasm, TextIO):
+        # Load out-of-order file.
+        output_cols = ["contig", "start", "end", "misassembly"]
+        try:
+            df_misasm = pl.read_csv(
+                output_misasm.name,
+                has_header=False,
+                separator="\t",
+                new_columns=output_cols,
+                raise_if_empty=False,
+            )
+        except pl.exceptions.ShapeError:
+            df_misasm = pl.DataFrame(schema=output_cols)
 
-    df_misasm = df_misasm.with_columns(
-        contig=pl.col("contig").str.replace(r":\d+-\d+$", "")
-    )
-
-    df_misasm.sort(by=["contig", "start"]).write_csv(
-        file=output_misasm, include_header=False, separator="\t"
-    )
+        # Erase file and then rewrite in sorted order.
+        output_misasm.truncate(0)
+        df_misasm.sort(by=["contig", "start"]).write_csv(
+            file=output_misasm, include_header=False, separator="\t"
+        )
+    # If written to stdout, read saved inputs.
+    elif output_status:
+        df_misasm = pl.concat(output_misasm)
 
     if output_status:
         # Save misassemblies to output bed
         region_status = []
-        # If only HETs, consider correctly assembled.
+        # Create interval tree per contig ignoring HETs
+        itrees_misasm: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
+        for contig, start, end, _ in df_misasm.filter(
+            pl.col("misassembly") == "HET"
+        ).iter_rows():
+            itrees_misasm[contig].add(Interval(start, end))
+
         for region, start, end in regions:
-            df_misasm_ctg = df_misasm.filter(pl.col("contig") == region)
-            if df_misasm_ctg.filter(
-                pl.col("misassembly") != str(Misassembly.HET)
-            ).is_empty():
+            if not itrees_misasm[region].overlaps(start, end):
                 region_status.append((region, start, end, str(RegionStatus.GOOD)))
             else:
                 region_status.append(

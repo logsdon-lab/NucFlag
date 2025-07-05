@@ -8,9 +8,13 @@ import argparse
 from collections import defaultdict
 from typing import DefaultDict
 from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import Future, as_completed
 from importlib.metadata import version
 
 import tomllib
+import polars as pl
+
+from nucflag.misassembly import Misassembly
 
 from .classifier.classifier import classify_plot_assembly
 from .config import DEF_CONFIG
@@ -18,7 +22,7 @@ from .io import (
     read_asm_regions,
     read_ignored_regions,
     read_overlay_regions,
-    write_misassemblies_and_status,
+    write_aggregated_misassemblies_and_status,
 )
 from .region import Region
 
@@ -56,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         "-o",
         "--output_misasm",
         default=sys.stdout,
-        type=argparse.FileType("wt"),
+        type=argparse.FileType("at"),
         help="Output bed file with misassembled regions.",
     )
     parser.add_argument(
@@ -94,6 +98,12 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         type=argparse.FileType("rt"),
         help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
+    )
+    parser.add_argument(
+        "--ignore_mtypes",
+        nargs="*",
+        choices=list(Misassembly),
+        help="Ignore misassembly types from plot and output bedfile.",
     )
     parser.add_argument(
         "--chrom_sizes",
@@ -177,6 +187,12 @@ def main() -> int:
     else:
         overlay_regions = defaultdict(lambda: defaultdict(set))
 
+    ignore_mtypes = set(args.ignore_mtypes) if args.ignore_mtypes else set()
+    if ignore_mtypes:
+        sys.stderr.write(
+            f"Ignoring the following misassembly types: {ignore_mtypes}.\n"
+        )
+
     # res = []
     # for region in regions:
     #     res.append(classify_plot_assembly(
@@ -189,6 +205,7 @@ def main() -> int:
     #         config,
     #         overlay_regions.get(region[0]),
     #         ignored_regions.get("all", set()).union(ignored_regions.get(region[0], set())),
+    #         ignore_mtypes,
     #         args.ylim,
     #     ))
 
@@ -196,33 +213,50 @@ def main() -> int:
     # Also create new processes aggressively to clear resources.
     # https://stackoverflow.com/a/61492363
     with ProcessPoolExecutor(max_workers=args.processes, max_tasks_per_child=1) as pool:
-        res = pool.map(
-            classify_plot_assembly,
-            *zip(
-                *[
-                    (
-                        args.infile,
-                        args.chrom_sizes,
-                        args.output_plot_dir,
-                        args.output_cov_dir,
-                        args.threads,
-                        *region,
-                        config,
-                        overlay_regions.get(region[0]),
-                        ignored_regions.get("all", set()).union(
-                            ignored_regions.get(region[0], set())
-                        ),
-                        args.ylim,
-                    )
-                    for region in regions
-                ]
-            ),
-        )
+        futures: list[Future[pl.DataFrame]] = []
+        for region in regions:
+            future = pool.submit(
+                classify_plot_assembly,
+                *(
+                    args.infile,
+                    args.chrom_sizes,
+                    args.output_plot_dir,
+                    args.output_cov_dir,
+                    args.threads,
+                    *region,
+                    config,
+                    overlay_regions.get(region[0]),
+                    ignored_regions.get("all", set()).union(
+                        ignored_regions.get(region[0], set())
+                    ),
+                    ignore_mtypes,
+                    args.ylim,
+                ),
+            )
+            futures.append(future)
 
-    write_misassemblies_and_status(
-        res,
+        dfs_misasm = []
+        for future in as_completed(futures):
+            try:
+                df_res = future.result()
+            except Exception as res:
+                sys.stderr.write(f"Failed for reason: {res}")
+                continue
+
+            # Write to file as soon as done.
+            df_res.write_csv(args.output_misasm, include_header=False, separator="\t")
+            # But if writing to stdout, cannot retrieve later for status so save.
+            if args.output_misasm.name == "<stdout>" and args.output_status:
+                dfs_misasm.append(df_res)
+
+    if dfs_misasm:
+        misasm_output = dfs_misasm
+    else:
+        misasm_output = args.output_misasm
+
+    write_aggregated_misassemblies_and_status(
         regions,
-        args.output_misasm,
+        misasm_output,
         args.output_status,
     )
 
