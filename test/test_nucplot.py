@@ -123,12 +123,12 @@ def test_identify_misassemblies(
             "test/misjoin/region.bed",
             "test/bigwig/chrom_sizes.tsv",
             [
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.bw",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.bw",
             ],
             [
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.bw",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.bw",
             ],
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
@@ -137,12 +137,12 @@ def test_identify_misassemblies(
             "test/misjoin/region.bed",
             None,
             [
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.wig.gz",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.wig.gz",
             ],
             [
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.wig.gz",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.wig.gz",
             ],
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
@@ -268,7 +268,7 @@ def test_correct_plot(
     with open(bed, "rt") as fh:
         for line in fh.readlines():
             name, start, stop, *_ = line.strip().split("\t")
-            contigs.append(f"{name}:{start}-{stop}")
+            contigs.append(f"{name}_{start}-{stop}")
 
     _ = subprocess.run(
         [

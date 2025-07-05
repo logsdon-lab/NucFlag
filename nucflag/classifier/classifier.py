@@ -223,7 +223,7 @@ def classify_plot_assembly(
     ignored_mtypes: set[Misassembly],
     ylim: float | int,
 ) -> pl.DataFrame:
-    contig_name = f"{contig}:{start}-{end}"
+    contig_name = f"{contig}_{start}-{end}"
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
 
     # Check file is indexed to prevent silent failure to read alignment file.
