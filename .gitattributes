@@ -14,3 +14,4 @@ test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw f
 test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz filter=lfs diff=lfs merge=lfs -text
 test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw filter=lfs diff=lfs merge=lfs -text
 test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz filter=lfs diff=lfs merge=lfs -text
+test/ignore_mtype/hg002v1.1_ont_q28_lc24_subset_no_fa.cram filter=lfs diff=lfs merge=lfs -text

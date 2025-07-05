@@ -13,7 +13,7 @@ from .het import identify_hets
 from .collapse import get_secondary_allele_coords, identify_collapses
 from .misjoin import identify_misjoins, identify_zero_cov_regions
 from .common import peak_finder, filter_interval_expr
-from ..utils import check_bam_indexed
+from ..utils import check_indexed
 from ..io import get_coverage_by_base, write_bigwig
 from ..misassembly import Misassembly
 from ..plot import plot_coverage
@@ -226,12 +226,12 @@ def classify_plot_assembly(
     contig_name = f"{contig}:{start}-{end}"
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
 
-    # Check bamfile is indexed to prevent silent failure to read alignment file.
-    check_bam_indexed(infile)
+    # Check file is indexed to prevent silent failure to read alignment file.
+    check_indexed(infile)
     try:
-        bam = pysam.AlignmentFile(infile, threads=threads)
+        aln = pysam.AlignmentFile(infile, threads=threads)
         cov_first_second = np.flip(
-            np.sort(get_coverage_by_base(bam, contig, start, end), axis=1).transpose(),
+            np.sort(get_coverage_by_base(aln, contig, start, end), axis=1).transpose(),
             axis=0,
         )
         df = pl.DataFrame(

@@ -82,6 +82,13 @@ from .helpers.integration import run_integration_test
             "test/missing_valleys/expected_status.bed",
             tuple(["-c", "test/missing_valleys/config.toml"]),
         ),
+        (
+            "test/ignore_mtype/hg002v1.1_ont_q28_lc24_subset_no_fa.cram",
+            "test/ignore_mtype/region.bed",
+            "test/ignore_mtype/expected_misassemblies.bed",
+            "test/ignore_mtype/expected_status.bed",
+            tuple(["-c", "test/ignore_mtype/config.toml", "--ignore_mtypes", "HET"]),
+        ),
     ],
 )
 def test_identify_misassemblies(

@@ -236,6 +236,7 @@ def main() -> int:
             futures.append(future)
 
         dfs_misasm = []
+        save_res = args.output_misasm.name == "<stdout>" and args.output_status
         for future in as_completed(futures):
             try:
                 df_res = future.result()
@@ -246,10 +247,10 @@ def main() -> int:
             # Write to file as soon as done.
             df_res.write_csv(args.output_misasm, include_header=False, separator="\t")
             # But if writing to stdout, cannot retrieve later for status so save.
-            if args.output_misasm.name == "<stdout>" and args.output_status:
+            if save_res:
                 dfs_misasm.append(df_res)
 
-    if dfs_misasm:
+    if save_res:
         misasm_output = dfs_misasm
     else:
         misasm_output = args.output_misasm
