@@ -82,6 +82,13 @@ from .helpers.integration import run_integration_test
             "test/missing_valleys/expected_status.bed",
             tuple(["-c", "test/missing_valleys/config.toml"]),
         ),
+        (
+            "test/ignore_mtype/hg002v1.1_ont_q28_lc24_subset_no_fa.cram",
+            "test/ignore_mtype/region.bed",
+            "test/ignore_mtype/expected_misassemblies.bed",
+            "test/ignore_mtype/expected_status.bed",
+            tuple(["-c", "test/ignore_mtype/config.toml", "--ignore_mtypes", "HET"]),
+        ),
     ],
 )
 def test_identify_misassemblies(
@@ -116,12 +123,12 @@ def test_identify_misassemblies(
             "test/misjoin/region.bed",
             "test/bigwig/chrom_sizes.tsv",
             [
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.bw",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.bw",
             ],
             [
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.bw",
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.bw",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.bw",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.bw",
             ],
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
@@ -130,12 +137,12 @@ def test_identify_misassemblies(
             "test/misjoin/region.bed",
             None,
             [
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
-                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.wig.gz",
+                "test/bigwig/tmp/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.wig.gz",
             ],
             [
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_first.wig.gz",
-                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003:1881763-8120526_second.wig.gz",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_first.wig.gz",
+                "test/bigwig/expected/HG00171_chr16_haplotype1-0000003_1881763-8120526_second.wig.gz",
             ],
             tuple(["-c", "test/misjoin/config_perc.toml"]),
         ),
@@ -261,7 +268,7 @@ def test_correct_plot(
     with open(bed, "rt") as fh:
         for line in fh.readlines():
             name, start, stop, *_ = line.strip().split("\t")
-            contigs.append(f"{name}:{start}-{stop}")
+            contigs.append(f"{name}_{start}-{stop}")
 
     _ = subprocess.run(
         [

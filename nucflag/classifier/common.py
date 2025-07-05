@@ -2,7 +2,6 @@ from math import floor
 from typing import Generator
 
 import scipy.signal
-import scipy.stats
 import numpy as np
 import polars as pl
 

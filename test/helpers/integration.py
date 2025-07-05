@@ -24,7 +24,9 @@ def check_output(outputs: Outputs_To_Check) -> None:
             sorted_exp_res = sorted(
                 line.strip() for line in exp_res_fh.readlines() if line
             )
-            assert sorted_in_res == sorted_exp_res
+            assert (
+                sorted_in_res == sorted_exp_res
+            ), f"{sorted_in_res} != {sorted_exp_res}"
 
 
 def run_integration_test(

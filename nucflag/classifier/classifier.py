@@ -13,7 +13,7 @@ from .het import identify_hets
 from .collapse import get_secondary_allele_coords, identify_collapses
 from .misjoin import identify_misjoins, identify_zero_cov_regions
 from .common import peak_finder, filter_interval_expr
-from ..utils import check_bam_indexed
+from ..utils import check_indexed
 from ..io import get_coverage_by_base, write_bigwig
 from ..misassembly import Misassembly
 from ..plot import plot_coverage
@@ -27,6 +27,7 @@ def filter_misassembled_ignored_regions(
     df_cov: pl.DataFrame,
     misassemblies: defaultdict[Misassembly, IntervalTree],
     ignored_regions: IntervalTree,
+    ignored_mtypes: set[Misassembly],
 ) -> pl.DataFrame:
     """
     Annotates input coverage dataframe with status column. Either good or misassembly type.
@@ -34,6 +35,7 @@ def filter_misassembled_ignored_regions(
     """
     # Annotate df with misassembly.
     lf = df_cov.lazy().with_columns(status=pl.lit("Good"))
+    # TODO: Might overflow stack.
     for mtype, regions in misassemblies.items():
         # Remove any overlapping regions.
         regions.merge_overlaps(strict=False)
@@ -52,6 +54,18 @@ def filter_misassembled_ignored_regions(
                 .otherwise(pl.col("status"))
             )
 
+    # Remove misassembly types.
+    for mtype in ignored_mtypes:
+        lf = lf.with_columns(
+            status=pl.when(pl.col("status") == str(mtype))
+            .then(pl.lit("good"))
+            .otherwise(pl.col("status"))
+        )
+        try:
+            misassemblies.pop(mtype)
+        except KeyError:
+            pass
+
     return lf.collect()
 
 
@@ -60,6 +74,7 @@ def classify_misassemblies(
     *,
     config: dict[str, Any],
     ignored_regions: list[Region],
+    ignored_mtypes: set[Misassembly],
 ) -> tuple[pl.DataFrame, dict[Misassembly, IntervalTree]]:
     ignored_regions_intervals = IntervalTree(
         r.region for r in ignored_regions if r.region
@@ -186,7 +201,7 @@ def classify_misassemblies(
 
     # Annotate df with misassembly and remove misassemblies in ignored regions.
     df_cov = filter_misassembled_ignored_regions(
-        df_cov, misassemblies, ignored_regions_intervals
+        df_cov, misassemblies, ignored_regions_intervals, ignored_mtypes
     )
 
     # TODO: false dupes
@@ -205,17 +220,18 @@ def classify_plot_assembly(
     config: dict[str, Any],
     overlay_regions: defaultdict[int, set[Region]] | None,
     ignored_regions: set[Region],
+    ignored_mtypes: set[Misassembly],
     ylim: float | int,
 ) -> pl.DataFrame:
-    contig_name = f"{contig}:{start}-{end}"
+    contig_name = f"{contig}_{start}-{end}"
     sys.stderr.write(f"Reading in NucFreq from region: {contig_name}\n")
 
-    # Check bamfile is indexed to prevent silent failure to read alignment file.
-    check_bam_indexed(infile)
+    # Check file is indexed to prevent silent failure to read alignment file.
+    check_indexed(infile)
     try:
-        bam = pysam.AlignmentFile(infile, threads=threads)
+        aln = pysam.AlignmentFile(infile, threads=threads)
         cov_first_second = np.flip(
-            np.sort(get_coverage_by_base(bam, contig, start, end), axis=1).transpose(),
+            np.sort(get_coverage_by_base(aln, contig, start, end), axis=1).transpose(),
             axis=0,
         )
         df = pl.DataFrame(
@@ -244,6 +260,7 @@ def classify_plot_assembly(
         df,
         config=config,
         ignored_regions=updated_ignored_regions,
+        ignored_mtypes=ignored_mtypes,
     )
     del df
 
@@ -271,7 +288,7 @@ def classify_plot_assembly(
 
     return pl.DataFrame(
         [
-            (contig_name, interval.begin, interval.end, misasm)
+            (contig, int(interval.begin), int(interval.end), misasm)
             for misasm, intervals in misassemblies.items()
             for interval in intervals
         ],

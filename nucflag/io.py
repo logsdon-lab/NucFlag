@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 import gzip
@@ -8,18 +9,17 @@ import polars as pl
 import numpy as np
 import pysam
 import pyBigWig
-from intervaltree import Interval
+from intervaltree import Interval, IntervalTree
 
 from .config import DEF_CONFIG
-from .utils import check_bam_indexed
-from .misassembly import Misassembly
+from .utils import check_indexed
 from .region import Action, ActionOpt, IgnoreOpt, Region, RegionStatus
 
 
 def get_coverage_by_base(
-    bam: pysam.AlignmentFile, contig: str, start: int, end: int
+    aln: pysam.AlignmentFile, contig: str, start: int, end: int
 ) -> np.ndarray:
-    coverage = bam.count_coverage(
+    coverage = aln.count_coverage(
         contig, start=start, stop=end, read_callback="nofilter", quality_threshold=None
     )
     assert len(coverage) == 4
@@ -50,18 +50,17 @@ def read_asm_regions(
             (ctg, start, stop) for ctg, start, stop, *_ in read_bed_file(input_regions)
         )
     else:
-        check_bam_indexed(infile)
-        if not infile.endswith(".bam"):
+        check_indexed(infile)
+        if not infile.endswith(".bam") and not infile.endswith(".cram"):
             raise NotImplementedError(
                 "Reading regions from coverage file not supported."
             )
-
-        with pysam.AlignmentFile(infile, threads=threads) as bam:
+        with pysam.AlignmentFile(infile, threads=threads) as aln:
             sys.stderr.write(
-                f"Reading entire {bam.filename} in {window_size:,} bp intervals because no bedfile was provided.\n"
+                f"Reading entire {aln.filename} in {window_size:,} bp intervals because no bedfile was provided.\n"
             )
-            for ref in bam.references:
-                ref_len = bam.get_reference_length(ref)
+            for ref in aln.references:
+                ref_len = aln.get_reference_length(ref)
                 num, rem = divmod(ref_len, window_size)
                 for i in range(1, num + 1):
                     yield (ref, (i - 1) * window_size, i * window_size)
@@ -149,34 +148,53 @@ def read_overlay_regions(
     return overlay_regions
 
 
-def write_misassemblies_and_status(
-    dfs_misasm: Iterable[pl.DataFrame],
+def write_aggregated_misassemblies_and_status(
     regions: Iterable[tuple[str, int, int]],
-    output_misasm: TextIO,
+    output_misasm: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
 ):
-    try:
-        df_misasm = pl.concat(df for df in dfs_misasm if not df.is_empty())
-    except ValueError:
-        df_misasm = pl.DataFrame(schema=["contig", "start", "end", "misassembly"])
+    output_cols = ["contig", "start", "end", "misassembly"]
 
-    df_misasm = df_misasm.with_columns(
-        contig=pl.col("contig").str.replace(r":\d+-\d+$", "")
-    )
-
-    df_misasm.sort(by=["contig", "start"]).write_csv(
-        file=output_misasm, include_header=False, separator="\t"
-    )
+    # If written to stdout, read saved inputs.
+    if isinstance(output_misasm, list):
+        try:
+            df_misasm = pl.concat(output_misasm)
+        except Exception:
+            df_misasm = pl.DataFrame(schema=output_cols)
+    elif isinstance(output_misasm, io.TextIOBase):
+        # Load out-of-order file.
+        try:
+            df_misasm = pl.read_csv(
+                output_misasm.name,
+                has_header=False,
+                separator="\t",
+                new_columns=output_cols,
+                raise_if_empty=False,
+            )
+            # Erase file and then rewrite in sorted order.
+            output_misasm.truncate(0)
+            df_misasm.unique().sort(by=["contig", "start"]).write_csv(
+                file=output_misasm, include_header=False, separator="\t"
+            )
+        except pl.exceptions.ShapeError:
+            df_misasm = pl.DataFrame(schema=output_cols)
+        except FileNotFoundError:
+            return
+    else:
+        raise ValueError(f"Invalid misasm output. {output_misasm}")
 
     if output_status:
         # Save misassemblies to output bed
         region_status = []
-        # If only HETs, consider correctly assembled.
+        # Create interval tree per contig ignoring HETs
+        itrees_misasm: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
+        for contig, start, end, _ in df_misasm.filter(
+            pl.col("misassembly") != "HET"
+        ).iter_rows():
+            itrees_misasm[contig].add(Interval(start, end))
+
         for region, start, end in regions:
-            df_misasm_ctg = df_misasm.filter(pl.col("contig") == region)
-            if df_misasm_ctg.filter(
-                pl.col("misassembly") != str(Misassembly.HET)
-            ).is_empty():
+            if not itrees_misasm[region].overlaps(start, end):
                 region_status.append((region, start, end, str(RegionStatus.GOOD)))
             else:
                 region_status.append(
