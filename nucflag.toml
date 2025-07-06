@@ -8,6 +8,7 @@ ignore_boundaries = true
 n_zscores_low = 3.5
 n_zscores_high = 3.5
 ratio_collapse = 1.5
+ratio_misjoin = 0.1
 ratio_false_dupe = 0.5
 
 [mapq]
