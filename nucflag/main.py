@@ -49,13 +49,13 @@ def parse_args() -> argparse.Namespace:
         "-i",
         "--infile",
         required=True,
-        help="Indexed BAM or CRAM file aligned to a genome assembly.",
+        help="Indexed BAM or CRAM file.",
     )
     parser.add_argument(
         "-f",
         "--fasta",
         default=None,
-        help="Reference fasta. Used to bin pileup using average nucleotide identity. Required if --infile is a CRAM file.",
+        help="Reference fasta. Used to bin pileup using average nucleotide identity and detect repeats.",
     )
     parser.add_argument(
         "-b",
@@ -269,7 +269,6 @@ def main() -> int:
 
     regions: list[tuple[int, int, str]] = get_regions(
         aln=args.infile,
-        fasta=args.fasta,
         bed=args.input_regions.name if args.input_regions else None,
         window=window,
     )
