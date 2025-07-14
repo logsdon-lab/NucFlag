@@ -1,7 +1,8 @@
 [general]
 log_level = "info"
-bp_merge = 5000
+bp_merge = 5_000
 bp_wg_window = 10_000_000
+bp_min_aln_length = 0
 ignore_boundaries = true
 
 [cov]
@@ -12,7 +13,7 @@ ratio_misjoin = 0.1
 ratio_false_dupe = 0.5
 
 [mapq]
-n_zscores_low = 1.5
+n_zscores_low = 1.0
 mapq_agg_fn = "Mean"
 
 [mismatch]
@@ -23,7 +24,7 @@ ratio_het = 0.1
 n_zscores_high = 5.0
 min_ins_size = 2
 min_del_size = 2
-ratio_indel = 0.25
+ratio_indel = 0.2
 
 [softclip]
 n_zscores_high = 3.5
