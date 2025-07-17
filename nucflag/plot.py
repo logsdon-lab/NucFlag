@@ -28,20 +28,18 @@ plt.rcParams["axes.xmargin"] = 0
 
 
 def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
-    ax.get_xaxis().set_visible(False)
-    ax.get_yaxis().set_visible(False)
+    ax.xaxis.set_visible(False)
+    ax.set_yticks([], [])
     ax.set_frame_on(False)
 
 
 def plot_coverage(
     itv: Interval,
     df_pileup: pl.DataFrame,
-    df_misasm: pl.DataFrame,
     overlay_regions: OrderedDict[str, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
 
-    # TODO: Move misassembly types to separate row.
     # TODO: Reorder tracks so in order of appearance.
     # TODO: Add label to mapq and bin track.
     # TODO: Rename bin to sequence composition/identity and add percentage.
@@ -51,10 +49,10 @@ def plot_coverage(
         fig, axs = plt.subplots(
             # | ---------- |
             # | \/\__/\||/ |
-            # | cov_legend |
             # | bed_legend |
-            # nrows (n for bed, 1 for the coverage plot, 1 for coverage plot legend, and n for bed legends)
-            len(overlay_regions.keys()) + 1 + 1 + len(overlay_regions.keys()),
+            # | cov_legend |
+            # nrows (n for bed, 1 for the coverage plot, n for bed legends, and 1 for coverage plot legend)
+            len(overlay_regions.keys()) + 1 + len(overlay_regions.keys()) + 1,
             # ncols
             1,
             figsize=(
@@ -64,10 +62,10 @@ def plot_coverage(
             sharex=True,
             gridspec_kw={
                 "height_ratios": [
-                    *[0.5 for _ in range(number_of_overlap_beds)],
-                    3,
-                    0.2,
                     *[0.3 for _ in range(number_of_overlap_beds)],
+                    3,
+                    *[0.15 for _ in range(number_of_overlap_beds)],
+                    0.15,
                 ]
             },
             layout="constrained",
@@ -81,6 +79,21 @@ def plot_coverage(
             bed_axs: matplotlib.axes.Axes = axs[i]
             minimalize_ax(bed_axs)
 
+            try:
+                _ = int(name)
+                title = None
+            except ValueError:
+                title = name
+
+            if title:
+                bed_axs.set_ylabel(
+                    title,
+                    rotation="horizontal",
+                    ma="right",
+                    ha="right",
+                    va="center",
+                )
+
             # Map uniq types to new color if none given.
             uniq_types = sorted({r.desc for r in regions if r.desc})
             cmap = dict(
@@ -90,6 +103,7 @@ def plot_coverage(
                 )
             )
             patches: list[ptch.Rectangle] = []
+            ylim = bed_axs.get_ylim()[1]
             for row in regions:
                 # Skip rows not within bounds of df.
                 if not itv.overlaps(row.region):
@@ -109,7 +123,7 @@ def plot_coverage(
                 rect = ptch.Rectangle(
                     (row.region.begin, 0),
                     width,
-                    0.5,
+                    ylim,
                     linewidth=1,
                     edgecolor=None,
                     facecolor=color,
@@ -126,7 +140,7 @@ def plot_coverage(
             1,
             figsize=(PLOT_WIDTH, PLOT_HEIGHT),
             layout="constrained",
-            gridspec_kw={"height_ratios": [3, 0.2]},
+            gridspec_kw={"height_ratios": [3, 0.15]},
         )
         ax = axs[0]
 
@@ -139,16 +153,15 @@ def plot_coverage(
         color="purple",
         label="Indels",
     )
-    if "mismatch" in df_pileup.columns:
-        ax.plot(
-            df_pileup["pos"],
-            df_pileup["mismatch"],
-            marker="o",
-            markersize=2,
-            linestyle="None",
-            color="red",
-            label="Mismatches",
-        )
+    ax.plot(
+        df_pileup["pos"],
+        df_pileup["mismatch"],
+        marker="o",
+        markersize=2,
+        linestyle="None",
+        color="red",
+        label="Mismatches",
+    )
     ax.plot(
         df_pileup["pos"],
         df_pileup["cov"],
@@ -158,46 +171,31 @@ def plot_coverage(
         color="black",
         label="Coverage",
     )
-    # Add misassembly rect patches to highlight region.
-    for region in df_misasm.iter_rows(named=True):
-        if region["name"] == "good":
-            continue
-        try:
-            rgb: str = region["itemRgb"]
-            rgb_color = [int(c) / 255 for c in rgb.split(",")]
-        except ValueError:
-            continue
-        st, end = region["chromStart"], region["chromEnd"]
-        ax.axvspan(
-            st,
-            end,
-            color=rgb_color,
-            alpha=0.4,
-            label=region["name"],
-        )
 
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073
     handles, labels = ax.get_legend_handles_labels()
     labels, ids = np.unique(labels, return_index=True)
     handles = [handles[i] for i in ids]
-    legend_cov_ax: matplotlib.axes.Axes = axs[number_of_overlap_beds + 1]
+    legend_cov_ax: matplotlib.axes.Axes = axs[-1]
     minimalize_ax(legend_cov_ax)
     legend_cov_ax.legend(
         handles,
         labels,
         loc="center",
+        alignment="left",
         ncols=len(labels),
         borderaxespad=0,
         fancybox=False,
         frameon=False,
         prop={"size": 12},
+        title="pileup",
     )
     # Add legends for each overlapped bedfile.
     for i, (name, sp_patches) in enumerate(subplot_patches.items()):
         # Remove plot elements from legend ax.
-        # Offset by 2 for coverage plot and its legend.
-        legend_ax: matplotlib.axes.Axes = axs[i + number_of_overlap_beds + 2]
+        # Offset by 1 for coverage plot.
+        legend_ax: matplotlib.axes.Axes = axs[i + number_of_overlap_beds + 1]
         minimalize_ax(legend_ax)
 
         # Filter rectangle patches.
@@ -247,7 +245,14 @@ def plot_coverage(
 
     ax.set_ylim(0, df_pileup["cov"].mean() * 3)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
-    ax.set_ylabel("Sequence read depth", fontweight="bold")
+    ax.set_ylabel(
+        "Sequence\nread\ndepth",
+        fontweight="bold",
+        rotation="horizontal",
+        ma="center",
+        ha="right",
+        va="center",
+    )
     ax.set_xticklabels(xlabels)
 
     # Hide the right and top spines

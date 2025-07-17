@@ -21,7 +21,12 @@ from .io import (
     write_bigwig,
     BED9_COLS,
 )
-from .region import Region, add_bin_overlay_region, add_mapq_overlay_region
+from .region import (
+    Region,
+    add_bin_overlay_region,
+    add_mapq_overlay_region,
+    add_misassemblies_overlay_region,
+)
 
 from py_nucflag import run_nucflag_itv, get_regions, print_config_from_preset
 
@@ -193,11 +198,14 @@ def plot_misassemblies(
                 add_bin_overlay_region(ctg, res.pileup.select("pos", "bin"))
             )
 
+        overlay_regions["misassemblies"] = set(
+            add_misassemblies_overlay_region(res.regions)
+        )
+
         logger.info(f"Plotting {ctg_coords}.")
         _ = plot_coverage(
             itv=Interval(st, end, ctg),
             df_pileup=res.pileup,
-            df_misasm=res.regions,
             overlay_regions=overlay_regions,
         )
 

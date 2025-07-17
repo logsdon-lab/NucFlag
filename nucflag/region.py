@@ -2,6 +2,7 @@ from enum import StrEnum, auto
 from typing import Generator, NamedTuple
 
 import polars as pl
+import matplotlib.colors
 from intervaltree import Interval
 
 
@@ -126,4 +127,28 @@ def add_bin_overlay_region(
             Interval(st, end),
             desc=f"b{bin_num}",
             action=Action(ActionOpt.PLOT, None),
+        )
+
+
+def add_misassemblies_overlay_region(df: pl.DataFrame) -> Generator[Region, None, None]:
+    df = df.with_columns(
+        itemRgb=pl.when(pl.col("name") == "good")
+        .then(pl.lit("#808080"))
+        .otherwise(
+            pl.when(pl.col("itemRgb").str.contains(","))
+            .then(
+                pl.col("itemRgb")
+                .str.split(",")
+                .list.eval(pl.element().cast(pl.Float32) / 255.0)
+                .map_elements(lambda x: matplotlib.colors.to_hex(x))
+            )
+            .otherwise(pl.col("itemRgb"))
+        )
+    ).select("chromStart", "chromEnd", "name", "itemRgb")
+    for row in df.iter_rows(named=True):
+        yield Region(
+            row["name"],
+            Interval(row["chromStart"], row["chromEnd"]),
+            desc=row["name"],
+            action=Action(ActionOpt.PLOT, row["itemRgb"]),
         )
