@@ -28,10 +28,10 @@ STATUSES = [
     "good",
     "indel",
     "softclip",
-    "low_quality",
+    "het_mismap",
     "collapse",
     "misjoin",
-    "false_dupe",
+    "false_dup",
     "homopolymer",
     "dinucleotide",
     "simple",
@@ -228,5 +228,5 @@ def write_output(
         .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
     )
     df_status.sort(by="chrom").write_csv(
-        file=output_status, include_header=True, separator="\t"
+        file=output_status, include_header=False, separator="\t"
     )
