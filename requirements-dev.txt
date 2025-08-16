@@ -2,7 +2,7 @@ matplotlib==3.8.3
 numpy==1.26.4
 polars==1.6.0
 intervaltree==3.1.0
-py-nucflag==0.1.0a9
+py-nucflag==0.1.0a10
 pyBigWig==0.3.24
 pre-commit
 imagehash

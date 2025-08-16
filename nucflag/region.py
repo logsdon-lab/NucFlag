@@ -118,14 +118,22 @@ def add_bin_overlay_region(
     regions = (
         df.with_columns(bin_grp=pl.col("bin").rle_id())
         .group_by(["bin_grp"])
-        .agg(st=pl.col("pos").min(), end=pl.col("pos").max(), bin=pl.col("bin").first())
-        .select("st", "end", "bin")
+        .agg(
+            st=pl.col("pos").min(),
+            end=pl.col("pos").max(),
+            bin_ident=pl.col("bin_ident").mean(),
+        )
+        .select("st", "end", "bin_ident")
     )
-    for st, end, bin_num in regions.iter_rows():
+    for st, end, bin_ident in regions.iter_rows():
+        if bin_ident == 0.0:
+            desc = "N/A"
+        else:
+            desc = f"{bin_ident:.2f}%"
         yield Region(
             name,
             Interval(st, end),
-            desc=f"b{bin_num}",
+            desc=desc,
             action=Action(ActionOpt.PLOT, None),
         )
 

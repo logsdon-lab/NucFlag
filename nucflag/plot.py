@@ -39,11 +39,6 @@ def plot_coverage(
     overlay_regions: OrderedDict[str, set[Region]] | None,
 ) -> tuple[plt.Figure, Any]:
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
-
-    # TODO: Reorder tracks so in order of appearance.
-    # TODO: Add label to mapq and bin track.
-    # TODO: Rename bin to sequence composition/identity and add percentage.
-
     number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
     if overlay_regions:
         fig, axs = plt.subplots(
@@ -189,7 +184,7 @@ def plot_coverage(
         fancybox=False,
         frameon=False,
         prop={"size": 12},
-        title="pileup",
+        title="Pileup",
     )
     # Add legends for each overlapped bedfile.
     for i, (name, sp_patches) in enumerate(subplot_patches.items()):

@@ -188,17 +188,19 @@ def plot_misassemblies(
     if plot_dir and isinstance(res.pileup, pl.DataFrame):
         if "mapq" in add_builtin_tracks:
             logger.info(f"Adding mapq track for {ctg_coords}.")
-            overlay_regions["mapq"] = set(
+            overlay_regions["MAPQ"] = set(
                 add_mapq_overlay_region(ctg, res.pileup.select("pos", "mapq"))
             )
 
         if "bin" in add_builtin_tracks:
             logger.info(f"Adding bin track for {ctg_coords}.")
-            overlay_regions["bin"] = set(
-                add_bin_overlay_region(ctg, res.pileup.select("pos", "bin"))
+            overlay_regions["Structure"] = set(
+                add_bin_overlay_region(
+                    ctg, res.pileup.select("pos", "bin", "bin_ident")
+                )
             )
 
-        overlay_regions["misassemblies"] = set(
+        overlay_regions["Misassemblies"] = set(
             add_misassemblies_overlay_region(res.regions)
         )
 
