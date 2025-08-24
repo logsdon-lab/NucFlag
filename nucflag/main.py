@@ -318,11 +318,12 @@ def main() -> int:
         with ProcessPoolExecutor(
             max_workers=args.processes, max_tasks_per_child=1
         ) as pool:
-            futures = [(a[2][2], pool.submit(plot_misassemblies, *a)) for a in all_args]
+            futures = [(a[2], pool.submit(plot_misassemblies, *a)) for a in all_args]
             for ctg, future in futures:
                 if future.exception():
+                    chrom, st, end = ctg
                     logger.error(
-                        f"Failed to write output for {ctg} ({future.exception()})"
+                        f"Failed to write output for {chrom}:{st}-{end} ({future.exception()})"
                     )
                     continue
                 dfs_regions.append(future.result())
