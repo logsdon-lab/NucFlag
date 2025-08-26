@@ -181,6 +181,8 @@ def plot_coverage(
         alignment="left",
         ncols=len(labels),
         borderaxespad=0,
+        handlelength=1.0,
+        handleheight=1.0,
         fancybox=False,
         frameon=False,
         prop={"size": 12},
@@ -220,6 +222,8 @@ def plot_coverage(
             title=title,
             # At least 1-15 columns in legend.
             ncols=min(max(len(sp_filtered_patches), 1), 15),
+            handlelength=1.0,
+            handleheight=1.0,
             borderaxespad=0,
             fancybox=False,
             frameon=False,

@@ -322,10 +322,9 @@ def main() -> int:
             for ctg, future in futures:
                 if future.exception():
                     chrom, st, end = ctg
-                    logger.error(
+                    raise RuntimeError(
                         f"Failed to write output for {chrom}:{st}-{end} ({future.exception()})"
                     )
-                    continue
                 dfs_regions.append(future.result())
 
     # Remove tempfile of ignored regions.
