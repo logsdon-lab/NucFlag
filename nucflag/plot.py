@@ -1,3 +1,4 @@
+import logging
 import warnings
 import matplotlib
 import matplotlib.axes
@@ -37,6 +38,7 @@ def plot_coverage(
     itv: Interval,
     df_pileup: pl.DataFrame,
     overlay_regions: OrderedDict[str, set[Region]] | None,
+    ylim: float | int = 100,
 ) -> tuple[plt.Figure, Any]:
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
     number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
@@ -242,7 +244,15 @@ def plot_coverage(
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    ax.set_ylim(0, df_pileup["cov"].mean() * 3)
+    if isinstance(ylim, float):
+        plot_ylim = df_pileup["first"].mean() * ylim
+    elif isinstance(ylim, int):
+        plot_ylim = ylim
+    else:
+        logging.error(f"Invalid {ylim} of type {type(ylim)}. Defaulting to 100.")
+        plot_ylim = 100
+
+    ax.set_ylim(0, plot_ylim)
     ax.set_xlabel("Assembly position ({})".format(lab), fontweight="bold")
     ax.set_ylabel(
         "Sequence\nread\ndepth",

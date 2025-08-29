@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import ast
 import sys
 import time
 import random
@@ -7,9 +8,10 @@ import logging
 import tomllib
 import tempfile
 import argparse
+from typing import TextIO
 from intervaltree import Interval
 from collections import OrderedDict, defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import polars as pl
 import matplotlib.pyplot as plt
@@ -147,6 +149,12 @@ def parse_args() -> argparse.Namespace:
         choices=["mapq", "bin"],
         help="Add built-in tracks used in nucflag as overlay tracks.",
     )
+    parser.add_argument(
+        "--ylim",
+        default=100,
+        type=ast.literal_eval,
+        help="Plot y-axis limit. If float, used as a scaling factor from mean. (ex. 3.0 is mean times 3)",
+    )
     # parser.add_argument("-v", "--version", action="version", version=version("nucflag"))
     return parser.parse_args()
 
@@ -235,6 +243,9 @@ def main() -> int:
     if args.output_pileup_dir:
         os.makedirs(args.output_pileup_dir, exist_ok=True)
 
+    if not (isinstance(args.ylim, float) or isinstance(args.ylim, int)):
+        raise ValueError(f"y-axis limit must be float or int. {args.ylim}")
+
     # Load ignored regions.
     ignore_bed = None
     tmpfile_ignore_bed = tempfile.NamedTemporaryFile("wt")
@@ -293,6 +304,7 @@ def main() -> int:
     logger.info(
         f"Generating outputs with {args.processes} processes with nucflag running with {args.threads} threads."
     )
+    save_res = args.output_regions.name == "<stdout>" and args.output_status
     all_args = [
         [
             args.infile,
@@ -318,22 +330,33 @@ def main() -> int:
         with ProcessPoolExecutor(
             max_workers=args.processes, max_tasks_per_child=1
         ) as pool:
-            futures = [(a[2], pool.submit(plot_misassemblies, *a)) for a in all_args]
-            for ctg, future in futures:
+            futures = {pool.submit(plot_misassemblies, *a): a[2] for a in all_args}
+            for future in as_completed(futures):
                 if future.exception():
-                    chrom, st, end = ctg
+                    chrom, st, end = futures[future]
                     raise RuntimeError(
                         f"Failed to write output for {chrom}:{st}-{end} ({future.exception()})"
                     )
-                dfs_regions.append(future.result())
+                df_res = future.result()
+                # Write to file as soon as done.
+                df_res.write_csv(
+                    args.output_regions, include_header=False, separator="\t"
+                )
+                # But if writing to stdout, cannot retrieve later for status so save.
+                if save_res:
+                    dfs_regions.append(df_res)
+
+    if save_res:
+        output_regions: list[pl.DataFrame] | TextIO = dfs_regions
+    else:
+        output_regions = args.output_regions
 
     # Remove tempfile of ignored regions.
     tmpfile_ignore_bed.close()
 
     logger.info(f"Writing region BED file to {args.output_regions.name}.")
     write_output(
-        dfs_regions,
-        args.output_regions,
+        output_regions,
         args.output_status,
     )
     logger.info("Done!")

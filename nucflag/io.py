@@ -1,3 +1,4 @@
+import io
 import os
 import gzip
 import logging
@@ -172,19 +173,39 @@ def write_bigwig(
 
 
 def write_output(
-    dfs_regions: list[pl.DataFrame],
-    output_regions: TextIO,
+    output_regions: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
 ) -> None:
-    try:
-        df_region = pl.concat(df for df in dfs_regions if not df.is_empty())
-    except ValueError:
-        df_region = pl.DataFrame(schema=["chrom", "chromStart", "chromEnd", "name"])
+    output_cols = ["contig", "start", "end", "misassembly"]
 
-    df_region.sort(by=["chrom", "chromStart"]).write_csv(
-        file=output_regions, include_header=False, separator="\t"
-    )
-
+    # If written to stdout, read saved inputs.
+    if isinstance(output_regions, list):
+        try:
+            df_region = pl.concat(output_regions)
+        except Exception:
+            # No assembly errors.
+            df_region = pl.DataFrame(schema=output_cols)
+    elif isinstance(output_regions, io.TextIOBase):
+        # Load out-of-order file.
+        try:
+            df_region = pl.read_csv(
+                output_regions.name,
+                has_header=False,
+                separator="\t",
+                new_columns=output_cols,
+                raise_if_empty=False,
+            )
+            # Erase file and then rewrite in sorted order.
+            output_regions.truncate(0)
+            df_region.unique().sort(by=["contig", "start"]).write_csv(
+                file=output_regions, include_header=False, separator="\t"
+            )
+        except pl.exceptions.ShapeError:
+            df_region = pl.DataFrame(schema=output_cols)
+        except FileNotFoundError:
+            return
+    else:
+        raise ValueError(f"Invalid misasm output. {output_regions}")
     if not output_status:
         return
 
