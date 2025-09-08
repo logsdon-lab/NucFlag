@@ -151,7 +151,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--ylim",
-        default=100,
+        default=3.0,
         type=ast.literal_eval,
         help="Plot y-axis limit. If float, used as a scaling factor from mean. (ex. 3.0 is mean times 3)",
     )
@@ -172,6 +172,7 @@ def plot_misassemblies(
     pileup_dir: str | None,
     add_pileup_data: set[str],
     add_builtin_tracks: set[str],
+    ylim: int | float,
 ) -> pl.DataFrame:
     # Safer logging. Each itv should be unique so no hash collisions?
     random.seed(hash(itv))
@@ -217,6 +218,7 @@ def plot_misassemblies(
             itv=Interval(st, end, ctg),
             df_pileup=res.pileup,
             overlay_regions=overlay_regions,
+            plot_ylim=ylim,
         )
 
         output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.png")
@@ -319,6 +321,7 @@ def main() -> int:
             args.output_pileup_dir,
             added_pileup_data,
             added_builtin_tracks,
+            args.ylim,
         ]
         for rgn in regions
     ]
@@ -333,7 +336,7 @@ def main() -> int:
             futures = {pool.submit(plot_misassemblies, *a): a[2] for a in all_args}
             for future in as_completed(futures):
                 if future.exception():
-                    chrom, st, end = futures[future]
+                    st, end, chrom = futures[future]
                     raise RuntimeError(
                         f"Failed to write output for {chrom}:{st}-{end} ({future.exception()})"
                     )

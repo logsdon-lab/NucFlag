@@ -38,7 +38,7 @@ def plot_coverage(
     itv: Interval,
     df_pileup: pl.DataFrame,
     overlay_regions: OrderedDict[str, set[Region]] | None,
-    ylim: float | int = 100,
+    plot_ylim: float | int = 100,
 ) -> tuple[plt.Figure, Any]:
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
     number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
@@ -244,12 +244,14 @@ def plot_coverage(
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
-    if isinstance(ylim, float):
-        plot_ylim = df_pileup["first"].mean() * ylim
-    elif isinstance(ylim, int):
-        plot_ylim = ylim
+    if isinstance(plot_ylim, float):
+        plot_ylim = df_pileup["cov"].mean() * plot_ylim
+    elif isinstance(plot_ylim, int):
+        plot_ylim = plot_ylim
     else:
-        logging.error(f"Invalid {ylim} of type {type(ylim)}. Defaulting to 100.")
+        logging.error(
+            f"Invalid {plot_ylim} of type {type(plot_ylim)}. Defaulting to 100."
+        )
         plot_ylim = 100
 
     ax.set_ylim(0, plot_ylim)
