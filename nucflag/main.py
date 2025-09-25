@@ -9,7 +9,7 @@ import tomllib
 import tempfile
 import argparse
 from typing import TextIO
-from intervaltree import Interval
+from intervaltree import Interval  # type: ignore[import-untyped]
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -30,7 +30,7 @@ from .region import (
     add_misassemblies_overlay_region,
 )
 
-from py_nucflag import run_nucflag_itv, get_regions, print_config_from_preset
+from py_nucflag import run_nucflag_itv, get_regions, print_config_from_preset  # type: ignore[import-untyped]
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -52,104 +52,112 @@ def parse_args() -> argparse.Namespace:
         description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument(
+    input_args = parser.add_argument_group(title="Input", description="Input files.")
+    input_args.add_argument(
         "-i",
         "--infile",
         required=True,
         help="Indexed BAM or CRAM file.",
     )
-    parser.add_argument(
+    input_args.add_argument(
         "-f",
         "--fasta",
         default=None,
         help="Reference fasta. Used to bin pileup using average nucleotide identity and detect repeats.",
     )
-    parser.add_argument(
+    input_args.add_argument(
         "-b",
         "--input_regions",
         default=None,
         type=argparse.FileType("rt"),
         help="BED file with regions to check.",
     )
-    parser.add_argument(
-        "-d",
-        "--output_plot_dir",
+    input_args.add_argument(
+        "--ignore_regions",
         default=None,
-        help="Output plot dir.",
+        type=argparse.FileType("rt"),
+        help="Bed file with regions to ignore. With format: [contig, start, end]",
     )
-    parser.add_argument(
-        "--output_pileup_dir",
-        default=None,
-        help="Output pileup dir. Generates bigWig files per region.",
+    output_args = parser.add_argument_group(
+        title="Outputs", description="Output files."
     )
-    parser.add_argument(
+    output_args.add_argument(
         "-o",
         "--output_regions",
         default=sys.stdout,
         type=argparse.FileType("wt"),
         help=f"Output bed file with checked regions. With format: {BED9_COLS}",
     )
-    parser.add_argument(
+    output_args.add_argument(
         "-s",
         "--output_status",
         default=None,
         type=argparse.FileType("wt"),
         help="Bed file with status of contigs and percentage breakdown of each misassembly type.",
     )
-    parser.add_argument(
-        "-t",
-        "--threads",
-        default=2,
-        type=int,
-        help="Threads for nucflag classification.",
-    )
-    parser.add_argument(
-        "-p",
-        "--processes",
-        default=8,
-        type=int,
-        help="Processes for plotting.",
-    )
-    parser.add_argument(
-        "-x",
-        "--preset",
+    output_args.add_argument(
+        "-d",
+        "--output_plot_dir",
         default=None,
-        choices=["ont_r9", "ont_r10", "hifi"],
-        help="Sequencing data specific preset.",
+        help="Output plot dir.",
     )
-    parser.add_argument(
-        "-c",
-        "--config",
+    output_args.add_argument(
+        "--output_pileup_dir",
         default=None,
-        type=str,
-        help="Threshold/params as toml file.",
+        help="Output pileup dir. Generates bigWig files per region.",
     )
-    parser.add_argument(
-        "--ignore_regions",
-        default=None,
-        type=argparse.FileType("rt"),
-        help="Bed file with regions to ignore. With format: contig|all,start,end,label,ignore:absolute|relative",
-    )
-    parser.add_argument(
-        "--overlay_regions",
-        nargs="*",
-        type=argparse.FileType("rt"),
-        help="Overlay additional regions as 4-column bedfile alongside coverage plot.",
-    )
-    parser.add_argument(
+    output_args.add_argument(
         "--add_pileup_data",
         nargs="*",
         choices=["cov", "mismatch", "mapq", "indel", "softclip"],
         default=["cov", "mismatch"],
         help="Add these pileup data types as bigWigs to --output_pileup_dir.",
     )
-    parser.add_argument(
+    config_args = parser.add_argument_group(
+        title="Config", description="Configuration."
+    )
+    config_args.add_argument(
+        "-t",
+        "--threads",
+        default=2,
+        type=int,
+        help="Threads for nucflag classification.",
+    )
+    config_args.add_argument(
+        "-p",
+        "--processes",
+        default=8,
+        type=int,
+        help="Processes for plotting.",
+    )
+    config_args.add_argument(
+        "-x",
+        "--preset",
+        default=None,
+        choices=["ont_r9", "ont_r10", "hifi"],
+        help="Sequencing data specific preset.",
+    )
+    config_args.add_argument(
+        "-c",
+        "--config",
+        default=None,
+        type=str,
+        help="Threshold/params as toml file.",
+    )
+    plot_args = parser.add_argument_group(title="Plot", description="Plot arguments.")
+    plot_args.add_argument(
+        "--overlay_regions",
+        nargs="*",
+        type=argparse.FileType("rt"),
+        help="Overlay additional regions as BED4 or BED9 alongside coverage plot.",
+    )
+    plot_args.add_argument(
         "--add_builtin_tracks",
         nargs="*",
         choices=["mapq", "bin"],
         help="Add built-in tracks used in nucflag as overlay tracks.",
     )
-    parser.add_argument(
+    plot_args.add_argument(
         "--ylim",
         default=3.0,
         type=ast.literal_eval,
@@ -260,22 +268,12 @@ def main() -> int:
 
     # Load additional regions to overlay and ignore.
     if args.overlay_regions:
-        additional_ignore_regions: set[Region] = set()
         overlay_regions: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
             OrderedDict
         )
         # Pass reference of overlay regions to update.
-        overlay_regions = read_overlay_regions(
-            args.overlay_regions, ignored_regions=additional_ignore_regions
-        )
+        overlay_regions = read_overlay_regions(args.overlay_regions)
         logger.info(f"Overlapping {len(args.overlay_regions)} bedfile(s).")
-
-        # Write regions to tempfile.
-        for rgn in additional_ignore_regions:
-            print(rgn.as_tsv(), file=tmpfile_ignore_bed)
-        # Toggle ignored regions if additional ones found in overlay bed.
-        if not ignore_bed and additional_ignore_regions:
-            ignore_bed = tmpfile_ignore_bed
     else:
         overlay_regions = defaultdict(OrderedDict)
 
@@ -328,6 +326,8 @@ def main() -> int:
     if args.processes == 1:
         for a in all_args:
             res = plot_misassemblies(*a)
+            # Write to file as soon as done.
+            res.write_csv(args.output_regions, include_header=False, separator="\t")
             dfs_regions.append(res)
     else:
         with ProcessPoolExecutor(

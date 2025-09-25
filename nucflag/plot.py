@@ -9,7 +9,7 @@ import matplotlib.patches as ptch
 
 from typing import Any
 from collections import OrderedDict
-from intervaltree import Interval
+from intervaltree import Interval  # type: ignore[import-untyped]
 from matplotlib.collections import PatchCollection
 
 from .region import ActionOpt, Region
@@ -96,7 +96,7 @@ def plot_coverage(
             cmap = dict(
                 zip(
                     uniq_types,
-                    (np.random.rand(3) for _ in range(len(uniq_types))),
+                    (tuple(np.random.rand(3)) for _ in range(len(uniq_types))),
                 )
             )
             patches: list[ptch.Rectangle] = []
@@ -110,6 +110,7 @@ def plot_coverage(
                     continue
                 width = row.region.length()
                 # Use color provided. Default to random generated ones otherwise.
+                color: str | tuple[float, float, float]
                 if row.action.desc:
                     color = row.action.desc
                 elif row.desc:
@@ -199,7 +200,7 @@ def plot_coverage(
 
         # Filter rectangle patches.
         sp_patch_labels = set()
-        sp_filtered_patches = []
+        sp_filtered_patches: list[ptch.Rectangle] = []
         for patch in sp_patches:
             patch_lbl = patch.get_label()
             if patch_lbl in sp_patch_labels:
@@ -208,7 +209,7 @@ def plot_coverage(
             sp_patch_labels.add(patch_lbl)
 
         # Sort patches by label.
-        sp_filtered_patches.sort(key=lambda p: p.get_label())
+        sp_filtered_patches.sort(key=lambda p: str(p.get_label()))
 
         # Don't allow title to be just index.
         try:
@@ -244,8 +245,10 @@ def plot_coverage(
         xlabels = [format(label / 1000, ",.1f") for label in ax.get_xticks()]
         lab = "kbp"
 
+    mean_cov = df_pileup["cov"].mean()
     if isinstance(plot_ylim, float):
-        plot_ylim = df_pileup["cov"].mean() * plot_ylim
+        assert isinstance(mean_cov, (float, int)), "Invalid mean coverage type."
+        plot_ylim = mean_cov * plot_ylim
     elif isinstance(plot_ylim, int):
         plot_ylim = plot_ylim
     else:

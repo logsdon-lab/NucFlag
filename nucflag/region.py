@@ -3,12 +3,7 @@ from typing import Generator, NamedTuple
 
 import polars as pl
 import matplotlib.colors
-from intervaltree import Interval
-
-
-class IgnoreOpt(StrEnum):
-    ABSOLUTE = auto()
-    RELATIVE = auto()
+from intervaltree import Interval  # type: ignore[import-untyped]
 
 
 class ActionOpt(StrEnum):
@@ -19,7 +14,7 @@ class ActionOpt(StrEnum):
 
 class Action(NamedTuple):
     opt: ActionOpt
-    desc: IgnoreOpt | str | None
+    desc: str | None
 
     def as_str(self):
         action = f"{self.opt}"
