@@ -1,6 +1,7 @@
 # `NucFlag`
 [![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
 [![PyPI - Version](https://img.shields.io/pypi/v/nucflag)](https://pypi.org/project/nucflag/)
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-blue.svg?style=flat)](http://bioconda.github.io/recipes/nucflag/README.html)
 
 Generates nucleotide frequency plots and genome misassembly BED files. Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq).
 
