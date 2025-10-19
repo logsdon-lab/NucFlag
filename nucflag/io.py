@@ -175,6 +175,7 @@ def write_output(
                 raise_if_empty=False,
             )
             # Erase file and then rewrite in sorted order.
+            output_regions.seek(0)
             output_regions.truncate(0)
             df_region.unique().sort(by=["chrom", "chromStart"]).write_csv(
                 file=output_regions, include_header=False, separator="\t"
