@@ -33,6 +33,7 @@ STATUSES = [
     "het_mismap",
     "collapse",
     "misjoin",
+    "mismatch",
     "false_dup",
     "homopolymer",
     "dinucleotide",
@@ -153,7 +154,7 @@ def write_output(
     output_regions: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
 ) -> None:
-    output_cols = ["contig", "start", "end", "misassembly"]
+    output_cols = ["chrom", "chromStart", "chromEnd", "name"]
 
     # If written to stdout, read saved inputs.
     if isinstance(output_regions, list):
@@ -174,7 +175,7 @@ def write_output(
             )
             # Erase file and then rewrite in sorted order.
             output_regions.truncate(0)
-            df_region.unique().sort(by=["contig", "start"]).write_csv(
+            df_region.unique().sort(by=["chrom", "chromStart"]).write_csv(
                 file=output_regions, include_header=False, separator="\t"
             )
         except pl.exceptions.ShapeError:
