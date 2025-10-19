@@ -1,8 +1,8 @@
+import random
 import logging
 import warnings
 import matplotlib
 import matplotlib.axes
-import numpy as np
 import polars as pl
 import matplotlib.pyplot as plt
 import matplotlib.patches as ptch
@@ -11,6 +11,7 @@ from typing import Any
 from collections import OrderedDict
 from intervaltree import Interval  # type: ignore[import-untyped]
 from matplotlib.collections import PatchCollection
+from functools import lru_cache
 
 from .region import ActionOpt, Region
 
@@ -32,6 +33,17 @@ def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
     ax.xaxis.set_visible(False)
     ax.set_yticks([], [])
     ax.set_frame_on(False)
+
+
+@lru_cache
+def get_random_color(name: str) -> str:
+    # Seed the RNG with the name
+    random.seed(name)
+    # THen generate rgb and hexcode
+    rgb = tuple(random.randint(0, 255) for _ in range(3))
+    assert len(rgb) == 3
+    # https://stackoverflow.com/a/3380739
+    return "#%02x%02x%02x" % rgb
 
 
 def plot_coverage(
@@ -76,29 +88,15 @@ def plot_coverage(
             bed_axs: matplotlib.axes.Axes = axs[i]
             minimalize_ax(bed_axs)
 
-            try:
-                _ = int(name)
-                title = None
-            except ValueError:
-                title = name
-
-            if title:
-                bed_axs.set_ylabel(
-                    title,
-                    rotation="horizontal",
-                    ma="right",
-                    ha="right",
-                    va="center",
-                )
+            bed_axs.set_ylabel(
+                name,
+                rotation="horizontal",
+                ma="right",
+                ha="right",
+                va="center",
+            )
 
             # Map uniq types to new color if none given.
-            uniq_types = sorted({r.desc for r in regions if r.desc})
-            cmap = dict(
-                zip(
-                    uniq_types,
-                    (tuple(np.random.rand(3)) for _ in range(len(uniq_types))),
-                )
-            )
             patches: list[ptch.Rectangle] = []
             ylim = bed_axs.get_ylim()[1]
             for row in regions:
@@ -114,7 +112,7 @@ def plot_coverage(
                 if row.action.desc:
                     color = row.action.desc
                 elif row.desc:
-                    color = cmap[row.desc]
+                    color = get_random_color(row.desc)
                 else:
                     raise ValueError(f"Region {row} has no description.")
 
@@ -173,13 +171,12 @@ def plot_coverage(
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073
     handles, labels = ax.get_legend_handles_labels()
-    labels, ids = np.unique(labels, return_index=True)
-    handles = [handles[i] for i in ids]
+    labels_handles = dict(zip(labels, handles))
     legend_cov_ax: matplotlib.axes.Axes = axs[-1]
     minimalize_ax(legend_cov_ax)
     legend_cov_ax.legend(
-        handles,
-        labels,
+        labels_handles.values(),
+        labels_handles.keys(),
         loc="center",
         alignment="left",
         ncols=len(labels),
@@ -211,18 +208,11 @@ def plot_coverage(
         # Sort patches by label.
         sp_filtered_patches.sort(key=lambda p: str(p.get_label()))
 
-        # Don't allow title to be just index.
-        try:
-            _ = int(name)
-            title = None
-        except ValueError:
-            title = name
-
         legend_ax.legend(
             handles=sp_filtered_patches,
             loc="center",
             alignment="left",
-            title=title,
+            title=name,
             # At least 1-15 columns in legend.
             ncols=min(max(len(sp_filtered_patches), 1), 15),
             handlelength=1.0,

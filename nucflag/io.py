@@ -103,11 +103,12 @@ def read_overlay_regions(
     )
     # 1 as zero idx reserved for mapq
     for i, bed in enumerate(infiles, 1):
+        track_label = f"Track {i}"
         for region in read_regions(bed, action=ActionOpt.PLOT):
-            if str(i) not in overlay_regions[region.name]:
-                overlay_regions[region.name][str(i)] = set()
+            if track_label not in overlay_regions[region.name]:
+                overlay_regions[region.name][track_label] = set()
 
-            overlay_regions[region.name][str(i)].add(region)
+            overlay_regions[region.name][track_label].add(region)
 
     return overlay_regions
 
