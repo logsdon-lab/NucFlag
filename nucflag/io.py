@@ -187,19 +187,34 @@ def write_output(
     if not output_status:
         return
 
+    # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
     df_status = (
         df_region.with_columns(
             length=pl.col("chromEnd") - pl.col("chromStart"),
-            ctg_length=pl.col("chromEnd").max().over("chrom")
-            - pl.col("chromStart").min().over("chrom"),
-            chromStart=pl.col("chromStart").min().over("chrom"),
-            chromEnd=pl.col("chromEnd").max().over("chrom"),
+            group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
+            .fill_null(False)
+            .rle_id()
+            .over("chrom"),
         )
-        .group_by(["chrom", "name"])
+        .with_columns(
+            group=pl.when(pl.col("group") % 2 != 0)
+            .then(pl.col("group") - 1)
+            .otherwise(pl.col("group"))
+            .over("chrom")
+        )
+        .with_columns(
+            minStart=pl.col("chromStart").min().over(["chrom", "group"]),
+            maxEnd=pl.col("chromEnd").max().over(["chrom", "group"]),
+        )
+        .group_by(["chrom", "name", "group"])
         .agg(
-            chromStart=pl.col("chromStart").first(),
-            chromEnd=pl.col("chromEnd").first(),
-            perc=(pl.col("length").sum() / pl.col("ctg_length").first()) * 100.0,
+            chromStart=pl.col("minStart").first(),
+            chromEnd=pl.col("maxEnd").first(),
+            perc=(
+                pl.col("length").sum()
+                / (pl.col("maxEnd").first() - pl.col("minStart").first())
+            )
+            * 100.0,
         )
         .pivot(
             on="name",
