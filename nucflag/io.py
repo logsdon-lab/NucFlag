@@ -27,7 +27,7 @@ BED9_COLS = [
     "itemRgb",
 ]
 STATUSES = [
-    "good",
+    "correct",
     "indel",
     "softclip",
     "het_mismap",
@@ -155,7 +155,7 @@ def write_output(
     output_regions: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
 ) -> None:
-    output_cols = ["chrom", "chromStart", "chromEnd", "name"]
+    output_cols = ["#chrom", "chromStart", "chromEnd", "name"]
 
     # If written to stdout, read saved inputs.
     if isinstance(output_regions, list):
@@ -177,8 +177,8 @@ def write_output(
             # Erase file and then rewrite in sorted order.
             output_regions.seek(0)
             output_regions.truncate(0)
-            df_region.unique().sort(by=["chrom", "chromStart"]).write_csv(
-                file=output_regions, include_header=False, separator="\t"
+            df_region.unique().sort(by=["#chrom", "chromStart"]).write_csv(
+                file=output_regions, include_header=True, separator="\t"
             )
         except pl.exceptions.ShapeError:
             df_region = pl.DataFrame(schema=output_cols)
@@ -196,19 +196,19 @@ def write_output(
             group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
             .fill_null(False)
             .rle_id()
-            .over("chrom"),
+            .over("#chrom"),
         )
         .with_columns(
             group=pl.when(pl.col("group") % 2 != 0)
             .then(pl.col("group") - 1)
             .otherwise(pl.col("group"))
-            .over("chrom")
+            .over("#chrom")
         )
         .with_columns(
-            minStart=pl.col("chromStart").min().over(["chrom", "group"]),
-            maxEnd=pl.col("chromEnd").max().over(["chrom", "group"]),
+            minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
+            maxEnd=pl.col("chromEnd").max().over(["#chrom", "group"]),
         )
-        .group_by(["chrom", "name", "group"])
+        .group_by(["#chrom", "name", "group"])
         .agg(
             chromStart=pl.col("minStart").first(),
             chromEnd=pl.col("maxEnd").first(),
@@ -220,20 +220,20 @@ def write_output(
         )
         .pivot(
             on="name",
-            index=["chrom", "chromStart", "chromEnd"],
+            index=["#chrom", "chromStart", "chromEnd"],
             values="perc",
             maintain_order=True,
         )
         .with_columns(
-            status=pl.when(pl.col("good") == 100.0)
-            .then(pl.lit("good"))
+            status=pl.when(pl.col("correct") == 100.0)
+            .then(pl.lit("correct"))
             .otherwise(pl.lit("misassembled")),
             # Ensure column exists.
             # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
             **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
         )
         .select(
-            pl.col("chrom"),
+            pl.col("#chrom"),
             pl.col("chromStart"),
             pl.col("chromEnd"),
             pl.col("status"),
@@ -243,6 +243,6 @@ def write_output(
         # chromStart and chromEnd get cast to float for some reason.
         .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
     )
-    df_status.sort(by="chrom").write_csv(
+    df_status.sort(by="#chrom").write_csv(
         file=output_status, include_header=True, separator="\t"
     )

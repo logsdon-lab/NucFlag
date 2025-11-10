@@ -140,7 +140,7 @@ def add_misassemblies_overlay_region(df: pl.DataFrame) -> Generator[Region, None
             pl.col("itemRgb")
             .str.split(",")
             .list.eval(pl.element().cast(pl.Float32) / 255.0)
-            .map_elements(lambda x: matplotlib.colors.to_hex(x))
+            .map_elements(lambda x: matplotlib.colors.to_hex(x), return_dtype=pl.String)
         )
         .otherwise(pl.col("itemRgb"))
     ).select("chromStart", "chromEnd", "name", "itemRgb")

@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 
 from .plot import plot_coverage
 from .io import (
+    STATUSES,
     read_overlay_regions,
     write_output,
     write_bigwig,
@@ -144,6 +145,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Threshold/params as toml file.",
     )
+    config_args.add_argument(
+        "--ignore_mtypes",
+        nargs="*",
+        choices=[status for status in STATUSES if status != "correct"],
+        help="Ignore call types from plot and output bedfile.",
+    )
     plot_args = parser.add_argument_group(title="Plot", description="Plot arguments.")
     plot_args.add_argument(
         "--overlay_regions",
@@ -180,6 +187,7 @@ def plot_misassemblies(
     pileup_dir: str | None,
     add_pileup_data: set[str],
     add_builtin_tracks: set[str],
+    ignore_mtypes: list[str],
     ylim: int | float,
 ) -> pl.DataFrame:
     # Safer logging. Each itv should be unique so no hash collisions?
@@ -201,6 +209,35 @@ def plot_misassemblies(
     ctg_coords = f"{ctg}:{st}-{end}"
     ctg_coords_filesafe = f"{ctg}_{st}-{end}"
 
+    # Ignore mtypes from results.
+    if ignore_mtypes:
+        # Must be sorted and from one chrom.
+        # Not writable.
+        regions = (
+            res.regions.with_columns(
+                name=pl.when(pl.col("name").is_in(ignore_mtypes))
+                .then(pl.lit("correct"))
+                .otherwise(pl.col("name"))
+            )
+            .with_columns(grp=pl.col("name").rle_id())
+            .group_by(["grp"])
+            .agg(
+                pl.col("#chrom").first(),
+                pl.col("chromStart").min(),
+                pl.col("chromEnd").max(),
+                pl.col("name").first(),
+                # May change as result of filtering.
+                pl.col("score").median(),
+                pl.col("strand").first(),
+                pl.col("thickStart").min(),
+                pl.col("thickEnd").max(),
+                pl.col("itemRgb").first(),
+            )
+            .drop("grp")
+        )
+    else:
+        regions = res.regions
+
     # Plot contig.
     if plot_dir and isinstance(res.pileup, pl.DataFrame):
         if "mapq" in add_builtin_tracks:
@@ -217,9 +254,7 @@ def plot_misassemblies(
                 )
             )
 
-        overlay_regions["Misassemblies"] = set(
-            add_misassemblies_overlay_region(res.regions)
-        )
+        overlay_regions["Types"] = set(add_misassemblies_overlay_region(regions))
 
         logger.info(f"Plotting {ctg_coords}.")
         _ = plot_coverage(
@@ -243,7 +278,7 @@ def plot_misassemblies(
             output_dir=os.path.join(pileup_dir),
         )
 
-    return res.regions
+    return regions
 
 
 def main() -> int:
@@ -294,6 +329,12 @@ def main() -> int:
         window=window,
     )
 
+    # Ignore types.
+    ignore_mtypes = []
+    if args.ignore_mtypes:
+        ignore_mtypes = args.ignore_mtypes
+        logger.info(f"Ignoring {ignore_mtypes} from output bed and plots.")
+
     # Tracks to add that are builtin to nucflag.
     # mapq/bins/...
     added_builtin_tracks = (
@@ -319,6 +360,7 @@ def main() -> int:
             args.output_pileup_dir,
             added_pileup_data,
             added_builtin_tracks,
+            ignore_mtypes,
             args.ylim,
         ]
         for rgn in regions

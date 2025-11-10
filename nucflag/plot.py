@@ -39,7 +39,7 @@ def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
 def get_random_color(name: str) -> str:
     # Seed the RNG with the name
     random.seed(name)
-    # THen generate rgb and hexcode
+    # Then generate rgb and hexcode
     rgb = tuple(random.randint(0, 255) for _ in range(3))
     assert len(rgb) == 3
     # https://stackoverflow.com/a/3380739
@@ -140,33 +140,20 @@ def plot_coverage(
         )
         ax = axs[0]
 
-    ax.plot(
-        df_pileup["pos"],
-        df_pileup["indel"],
-        marker="o",
-        linestyle="None",
-        markersize=2,
-        color="purple",
-        label="Indels",
-    )
-    ax.plot(
-        df_pileup["pos"],
-        df_pileup["mismatch"],
-        marker="o",
-        markersize=2,
-        linestyle="None",
-        color="red",
-        label="Mismatches",
-    )
-    ax.plot(
-        df_pileup["pos"],
-        df_pileup["cov"],
-        marker="o",
-        linestyle="None",
-        markersize=2,
-        color="black",
-        label="Coverage",
-    )
+    for typ, color, label in (
+        ("indel", "purple", "Indels"),
+        ("mismatch", "red", "Mismatches"),
+        ("cov", "black", "Coverage"),
+    ):
+        ax.plot(
+            df_pileup["pos"],
+            df_pileup[typ],
+            marker="o",
+            linestyle="None",
+            markersize=2,
+            color=color,
+            label=label,
+        )
 
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073
