@@ -87,7 +87,7 @@ def parse_args() -> argparse.Namespace:
         "--output_regions",
         default=sys.stdout,
         type=argparse.FileType("wt"),
-        help=f"Output bed file with checked regions. With format: {BED9_COLS}",
+        help=f"Output bed file with checked regions. With format: {[c[0] for c in BED9_COLS]}",
     )
     output_args.add_argument(
         "-s",

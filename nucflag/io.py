@@ -16,15 +16,15 @@ from .region import Action, ActionOpt, Region
 logger = logging.getLogger(__name__)
 
 BED9_COLS = [
-    "chrom",
-    "chromStart",
-    "chromEnd",
-    "name",
-    "score",
-    "strand",
-    "thickStart",
-    "thickEnd",
-    "itemRgb",
+    ("#chrom", pl.String),
+    ("chromStart", pl.UInt64),
+    ("chromEnd", pl.UInt64),
+    ("name", pl.String),
+    ("score", pl.UInt64),
+    ("strand", pl.String),
+    ("thickStart", pl.UInt64),
+    ("thickEnd", pl.UInt64),
+    ("itemRgb", pl.String),
 ]
 STATUSES = [
     "correct",
@@ -155,15 +155,13 @@ def write_output(
     output_regions: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
 ) -> None:
-    output_cols = ["#chrom", "chromStart", "chromEnd", "name"]
-
     # If written to stdout, read saved inputs.
     if isinstance(output_regions, list):
         try:
             df_region = pl.concat(output_regions)
         except Exception:
             # No assembly errors.
-            df_region = pl.DataFrame(schema=output_cols)
+            df_region = pl.DataFrame(schema=BED9_COLS)
     elif isinstance(output_regions, io.TextIOBase):
         # Load out-of-order file.
         try:
@@ -171,7 +169,7 @@ def write_output(
                 output_regions.name,
                 has_header=False,
                 separator="\t",
-                new_columns=output_cols,
+                schema=dict(BED9_COLS),
                 raise_if_empty=False,
             )
             # Erase file and then rewrite in sorted order.
@@ -181,7 +179,7 @@ def write_output(
                 file=output_regions, include_header=True, separator="\t"
             )
         except pl.exceptions.ShapeError:
-            df_region = pl.DataFrame(schema=output_cols)
+            df_region = pl.DataFrame(schema=BED9_COLS)
         except FileNotFoundError:
             return
     else:
@@ -224,13 +222,15 @@ def write_output(
             values="perc",
             maintain_order=True,
         )
+        # Ensure column exists.
+        # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
+        .with_columns(
+            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
+        )
         .with_columns(
             status=pl.when(pl.col("correct") == 100.0)
             .then(pl.lit("correct"))
             .otherwise(pl.lit("misassembled")),
-            # Ensure column exists.
-            # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
-            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
         )
         .select(
             pl.col("#chrom"),
