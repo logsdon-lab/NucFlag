@@ -4,7 +4,7 @@ import argparse
 
 from typing import TYPE_CHECKING, Any
 
-from .io import BED9_COLS, STATUSES
+from ..common import BED9_COLS, STATUSES
 
 if TYPE_CHECKING:
     SubArgumentParser = argparse._SubParsersAction[argparse.ArgumentParser]
@@ -16,6 +16,7 @@ def add_call_cli(parser: SubArgumentParser) -> None:
     ap = parser.add_parser(
         "call",
         description="Use per-base read coverage to classify/plot misassemblies",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     input_args = ap.add_argument_group(title="Input", description="Input files.")
     input_args.add_argument(
@@ -49,7 +50,7 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         "--output_regions",
         default=sys.stdout,
         type=argparse.FileType("wt"),
-        help=f"Output bed file with checked regions. With format: {BED9_COLS}",
+        help=f"Output bed file with checked regions. With format: {[c[0] for c in BED9_COLS]}",
     )
     output_args.add_argument(
         "-s",
@@ -129,5 +130,28 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         default=3.0,
         type=ast.literal_eval,
         help="Plot y-axis limit. If float, used as a scaling factor from mean. (ex. 3.0 is mean times 3)",
+    )
+    return None
+
+
+def add_status_cli(parser: SubArgumentParser) -> None:
+    ap = parser.add_parser(
+        "status",
+        description="Generate status output from misassembly calls.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    ap.add_argument(
+        "-i",
+        "--infile",
+        type=argparse.FileType("rb"),
+        required=True,
+        help="Input NucFlag misassembly calls as BED9.",
+    )
+    ap.add_argument(
+        "-o",
+        "--outfile",
+        default=sys.stdout,
+        type=argparse.FileType("wt"),
+        help="Bed file with status of contigs and percentage breakdown of each misassembly type.",
     )
     return None

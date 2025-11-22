@@ -11,36 +11,10 @@ import polars as pl
 from matplotlib.colors import rgb2hex
 from intervaltree import Interval  # type: ignore[import-untyped]
 
+from ..common import BED9_COLS, STATUSES
 from .region import Action, ActionOpt, Region
 
 logger = logging.getLogger(__name__)
-
-BED9_COLS = [
-    "chrom",
-    "chromStart",
-    "chromEnd",
-    "name",
-    "score",
-    "strand",
-    "thickStart",
-    "thickEnd",
-    "itemRgb",
-]
-STATUSES = [
-    "correct",
-    "indel",
-    "softclip",
-    "het_mismap",
-    "collapse",
-    "misjoin",
-    "mismatch",
-    "false_dup",
-    "homopolymer",
-    "dinucleotide",
-    "simple",
-    "other",
-    "scaffold",
-]
 
 
 def read_bed_file(
@@ -151,47 +125,11 @@ def write_bigwig(
                 bw.addEntries(chrom, start, values=values, span=1, step=1)
 
 
-def write_output(
-    output_regions: TextIO | list[pl.DataFrame],
-    output_status: TextIO | None,
-) -> None:
-    output_cols = ["#chrom", "chromStart", "chromEnd", "name"]
-
-    # If written to stdout, read saved inputs.
-    if isinstance(output_regions, list):
-        try:
-            df_region = pl.concat(output_regions)
-        except Exception:
-            # No assembly errors.
-            df_region = pl.DataFrame(schema=output_cols)
-    elif isinstance(output_regions, io.TextIOBase):
-        # Load out-of-order file.
-        try:
-            df_region = pl.read_csv(
-                output_regions.name,
-                has_header=False,
-                separator="\t",
-                new_columns=output_cols,
-                raise_if_empty=False,
-            )
-            # Erase file and then rewrite in sorted order.
-            output_regions.seek(0)
-            output_regions.truncate(0)
-            df_region.unique().sort(by=["#chrom", "chromStart"]).write_csv(
-                file=output_regions, include_header=True, separator="\t"
-            )
-        except pl.exceptions.ShapeError:
-            df_region = pl.DataFrame(schema=output_cols)
-        except FileNotFoundError:
-            return
-    else:
-        raise ValueError(f"Invalid misasm output. {output_regions}")
-    if not output_status:
-        return
-
+def generate_status_from_regions(df_region: pl.DataFrame) -> pl.DataFrame:
     # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
-    df_status = (
-        df_region.with_columns(
+    df_region_grp = (
+        df_region.sort(by=["#chrom", "chromStart"])
+        .with_columns(
             length=pl.col("chromEnd") - pl.col("chromStart"),
             group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
             .fill_null(False)
@@ -204,7 +142,9 @@ def write_output(
             .otherwise(pl.col("group"))
             .over("#chrom")
         )
-        .with_columns(
+    )
+    return (
+        df_region_grp.with_columns(
             minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
             maxEnd=pl.col("chromEnd").max().over(["#chrom", "group"]),
         )
@@ -225,12 +165,14 @@ def write_output(
             maintain_order=True,
         )
         .with_columns(
-            status=pl.when(pl.col("correct") == 100.0)
-            .then(pl.lit("correct"))
-            .otherwise(pl.lit("misassembled")),
             # Ensure column exists.
             # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
             **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
+        )
+        .with_columns(
+            status=pl.when(pl.col("correct") == 100.0)
+            .then(pl.lit("correct"))
+            .otherwise(pl.lit("misassembled")),
         )
         .select(
             pl.col("#chrom"),
@@ -242,7 +184,45 @@ def write_output(
         .fill_null(0.0)
         # chromStart and chromEnd get cast to float for some reason.
         .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
+        .sort(by=["#chrom", "chromStart"])
     )
-    df_status.sort(by="#chrom").write_csv(
-        file=output_status, include_header=True, separator="\t"
-    )
+
+
+def write_output(
+    output_regions: TextIO | list[pl.DataFrame],
+    output_status: TextIO | None,
+) -> None:
+    # If written to stdout, read saved inputs.
+    if isinstance(output_regions, list):
+        try:
+            df_region = pl.concat(output_regions)
+        except Exception:
+            # No assembly errors.
+            df_region = pl.DataFrame(schema=BED9_COLS)
+    elif isinstance(output_regions, io.TextIOBase):
+        # Load out-of-order file.
+        try:
+            df_region = pl.read_csv(
+                output_regions.name,
+                has_header=False,
+                separator="\t",
+                schema=dict(BED9_COLS),
+                raise_if_empty=False,
+            )
+            # Erase file and then rewrite in sorted order.
+            output_regions.seek(0)
+            output_regions.truncate(0)
+            df_region.unique().sort(by=["#chrom", "chromStart"]).write_csv(
+                file=output_regions, include_header=True, separator="\t"
+            )
+        except pl.exceptions.ShapeError:
+            df_region = pl.DataFrame(schema=BED9_COLS)
+        except FileNotFoundError:
+            return
+    else:
+        raise ValueError(f"Invalid misasm output. {output_regions}")
+    if not output_status:
+        return
+
+    df_status = generate_status_from_regions(df_region)
+    df_status.write_csv(file=output_status, include_header=True, separator="\t")

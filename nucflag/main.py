@@ -1,9 +1,12 @@
 #!/usr/bin/env python
+import sys
 import time
 import logging
 import argparse
 
-from .call import add_call_cli, call_assemblies
+from .call import add_call_cli, add_status_cli, call_assemblies, create_status
+from .ideogram import add_ideogram_cli, create_ideogram
+
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -27,13 +30,20 @@ def main() -> int:
 
     sub_ap = ap.add_subparsers(dest="cmd")
     add_call_cli(sub_ap)
+    add_status_cli(sub_ap)
+    add_ideogram_cli(sub_ap)
 
     args = ap.parse_args()
 
     if args.cmd == "call":
         return call_assemblies(args)
+    elif args.cmd == "status":
+        return create_status(args)
+    elif args.cmd == "ideogram":
+        return create_ideogram(args)
     else:
-        raise ValueError(f"Invalid command: {args.cmd}")
+        ap.print_help(sys.stderr)
+        return 1
 
     return 0
 

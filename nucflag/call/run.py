@@ -19,6 +19,8 @@ from .io import (
     read_overlay_regions,
     write_output,
     write_bigwig,
+    generate_status_from_regions,
+    BED9_COLS,
 )
 from .region import (
     Region,
@@ -265,4 +267,19 @@ def call_assemblies(args: argparse.Namespace) -> int:
         args.output_status,
     )
     logger.info("Done!")
+    return 0
+
+
+def create_status(args: argparse.Namespace) -> int:
+    df_regions = pl.read_csv(
+        args.infile,
+        separator="\t",
+        has_header=True,
+        schema=dict(BED9_COLS),
+    )
+    if df_regions.is_empty():
+        raise ValueError(f"No regions to generate status for {args.infile}")
+
+    df_status = generate_status_from_regions(df_regions)
+    df_status.write_csv(file=args.outfile, include_header=True, separator="\t")
     return 0
