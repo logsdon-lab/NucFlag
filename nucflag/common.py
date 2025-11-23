@@ -1,5 +1,5 @@
 import polars as pl
-
+from matplotlib.axes import Axes
 
 BED9_COLS = [
     ("#chrom", pl.String),
@@ -27,3 +27,11 @@ STATUSES = (
     "other_repeat",
     "scaffold",
 )
+
+
+def minimalize_ax(ax: Axes, *, remove_ticks: bool = False):
+    for spine in ["left", "right", "bottom", "top"]:
+        ax.spines[spine].set_visible(False)
+    if remove_ticks:
+        ax.set_xticks([], [])
+        ax.set_yticks([], [])

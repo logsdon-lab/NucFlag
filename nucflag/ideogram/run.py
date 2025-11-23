@@ -12,21 +12,13 @@ from matplotlib.colors import rgb2hex
 from matplotlib.patches import FancyBboxPatch, Patch
 from pyideogram.matplotlib_extension import SideRound
 
-from ..common import BED9_COLS
+from ..common import BED9_COLS, minimalize_ax
 
 BAND_COLORS = pyid.BANDCOL | {"none": (1.0, 1.0, 1.0)}
 LBL_KWARGS = dict(rotation=0, ha="right", va="center")
 
 
 logger = logging.getLogger(__name__)
-
-
-def minimize_ax(ax: Axes, *, remove_ticks: bool = False):
-    for spine in ["left", "right", "bottom", "top"]:
-        ax.spines[spine].set_visible(False)
-    if remove_ticks:
-        ax.set_xticks([], [])
-        ax.set_yticks([], [])
 
 
 def draw_ideogramh_no_cytobands(
@@ -100,7 +92,8 @@ def create_ideogram(args: argparse.Namespace):
     df_calls = pl.read_csv(
         args.infile,
         separator="\t",
-        has_header=True,
+        has_header=False,
+        comment_prefix="#",
         schema=dict(BED9_COLS),
     ).with_columns(length=pl.col("chromEnd") - pl.col("chromStart"))
 
@@ -153,7 +146,7 @@ def create_ideogram(args: argparse.Namespace):
         chrom_length = fai_map[chrom_name]
 
         logger.info(
-            f"On chromosome #{chrom_name_idx + 1} {chrom_name} ({chrom_length // 1_000_000} Mbp) ..."
+            f"On contig #{chrom_name_idx + 1} {chrom_name} ({chrom_length // 1_000_000} Mbp) ..."
         )
         ax_row_idx_chrom = chrom_name_idx * num_tracks
         ax_row_indices_tracks = range(
@@ -165,8 +158,8 @@ def create_ideogram(args: argparse.Namespace):
         ax_chrom.xaxis.set_tick_params(which="both", length=0, labelleft=False)
         ax_chrom.yaxis.set_tick_params(which="both", length=0)
         # pyideogram removes xyticks
-        minimize_ax(ax_chrom)
-        minimize_ax(ax_chrom_stats, remove_ticks=True)
+        minimalize_ax(ax_chrom)
+        minimalize_ax(ax_chrom_stats, remove_ticks=True)
 
         for ax_row_idx in ax_row_indices_tracks:
             ax_track: Axes = axes[ax_row_idx, ax_col_idx_chrom]
@@ -174,8 +167,8 @@ def create_ideogram(args: argparse.Namespace):
 
             ax_track.set_xlim(0, max_length)
             ax_track.set_ylim(0, 1)
-            minimize_ax(ax_track, remove_ticks=True)
-            minimize_ax(ax_stats, remove_ticks=True)
+            minimalize_ax(ax_track, remove_ticks=True)
+            minimalize_ax(ax_stats, remove_ticks=True)
 
             # Write stats
             type_counts = dict(
@@ -215,8 +208,8 @@ def create_ideogram(args: argparse.Namespace):
 
     # Add legend.
     ax_legend: Axes = axes[len(chrom_names) * num_tracks, ax_col_idx_chrom]
-    minimize_ax(ax_legend, remove_ticks=True)
-    minimize_ax(
+    minimalize_ax(ax_legend, remove_ticks=True)
+    minimalize_ax(
         axes[len(chrom_names) * num_tracks, ax_col_idx_stats], remove_ticks=True
     )
     ax_legend.legend(

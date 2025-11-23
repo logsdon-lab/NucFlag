@@ -274,7 +274,8 @@ def create_status(args: argparse.Namespace) -> int:
     df_regions = pl.read_csv(
         args.infile,
         separator="\t",
-        has_header=True,
+        has_header=False,
+        comment_prefix="#",
         schema=dict(BED9_COLS),
     )
     if df_regions.is_empty():

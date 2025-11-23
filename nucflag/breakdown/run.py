@@ -10,25 +10,18 @@ from matplotlib.colors import rgb2hex
 from matplotlib.patches import Patch
 
 
-from ..common import BED9_COLS, STATUSES
+from ..common import BED9_COLS, STATUSES, minimalize_ax
 
 
 logger = logging.getLogger(__name__)
-
-
-def minimize_ax(ax: Axes, *, remove_ticks: bool = False):
-    for spine in ["left", "right", "bottom", "top"]:
-        ax.spines[spine].set_visible(False)
-    if remove_ticks:
-        ax.set_xticks([], [])
-        ax.set_yticks([], [])
 
 
 def create_breakdown_plot(args: argparse.Namespace):
     df_calls = pl.read_csv(
         args.infile,
         separator="\t",
-        has_header=True,
+        has_header=False,
+        comment_prefix="#",
         schema=dict(BED9_COLS),
     ).with_columns(length=pl.col("chromEnd") - pl.col("chromStart"))
 
@@ -72,7 +65,13 @@ def create_breakdown_plot(args: argparse.Namespace):
         .sort(by=["#chrom", "name"])
     )
     # Scale fig width by number of chroms
-    fig, ax = plt.subplots(figsize=(len(chrom_names), 20), layout="constrained")
+    fig, axes = plt.subplots(
+        nrows=2,
+        height_ratios=[0.9, 0.1],
+        figsize=(len(chrom_names), 20),
+        layout="constrained",
+    )
+    ax: Axes = axes[0]
     bottom = np.zeros(len(chrom_names))
 
     if args.type == "percent":
@@ -111,10 +110,12 @@ def create_breakdown_plot(args: argparse.Namespace):
         ax.spines[spine].set_visible(False)
 
     # Add legend.
-    ax.legend(
+    legend_ax: Axes = axes[1]
+    minimalize_ax(legend_ax, remove_ticks=True)
+    legend_ax.legend(
         handles=[Patch(facecolor=color, label=lbl) for lbl, color in color_key.items()],
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.1),
+        bbox_to_anchor=(0.5, 0.5),
         ncol=len(color_key),
         frameon=False,
         edgecolor="black",
