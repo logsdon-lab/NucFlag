@@ -230,6 +230,6 @@ def create_ideogram(args: argparse.Namespace):
         handleheight=0.7,
     )
     # Reduce white space between haps
-    logger.info(f"Saving to {args.output_prefix}.[pdf|png]")
+    logger.info(f"Saving to {args.output_prefix}.(pdf|png)")
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)

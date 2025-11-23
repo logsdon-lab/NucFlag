@@ -6,7 +6,7 @@ import argparse
 
 from .call import add_call_cli, add_status_cli, call_assemblies, create_status
 from .ideogram import add_ideogram_cli, create_ideogram
-
+from .breakdown import add_breakdown_cli, create_breakdown_plot
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -32,6 +32,7 @@ def main() -> int:
     add_call_cli(sub_ap)
     add_status_cli(sub_ap)
     add_ideogram_cli(sub_ap)
+    add_breakdown_cli(sub_ap)
 
     args = ap.parse_args()
 
@@ -41,6 +42,8 @@ def main() -> int:
         return create_status(args)
     elif args.cmd == "ideogram":
         return create_ideogram(args)
+    elif args.cmd == "breakdown":
+        return create_breakdown_plot(args)
     else:
         ap.print_help(sys.stderr)
         return 1

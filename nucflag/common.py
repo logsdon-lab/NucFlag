@@ -23,7 +23,7 @@ STATUSES = (
     "false_dup",
     "homopolymer",
     "dinucleotide",
-    "simple",
-    "other",
+    "simple_repeat",
+    "other_repeat",
     "scaffold",
 )
