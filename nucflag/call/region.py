@@ -16,7 +16,7 @@ class Action(NamedTuple):
     opt: ActionOpt
     desc: str | None
 
-    def as_str(self):
+    def as_str(self) -> str:
         action = f"{self.opt}"
         if self.desc:
             action = f"{action}:{self.desc}"

@@ -16,7 +16,7 @@ from ..common import BED9_COLS, STATUSES, minimalize_ax
 logger = logging.getLogger(__name__)
 
 
-def create_breakdown_plot(args: argparse.Namespace):
+def create_breakdown_plot(args: argparse.Namespace) -> int:
     df_calls = pl.read_csv(
         args.infile,
         separator="\t",
@@ -125,3 +125,5 @@ def create_breakdown_plot(args: argparse.Namespace):
     logger.info(f"Saving to {args.output_prefix}.(pdf|png)")
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=300)
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=300)
+
+    return 0

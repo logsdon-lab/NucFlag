@@ -12,6 +12,7 @@ BED9_COLS = [
     ("thickEnd", pl.UInt64),
     ("itemRgb", pl.String),
 ]
+
 STATUSES = (
     "correct",
     "indel",
@@ -29,7 +30,7 @@ STATUSES = (
 )
 
 
-def minimalize_ax(ax: Axes, *, remove_ticks: bool = False):
+def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
     for spine in ["left", "right", "bottom", "top"]:
         ax.spines[spine].set_visible(False)
     if remove_ticks:

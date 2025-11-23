@@ -88,7 +88,7 @@ def draw_ideogramh_no_cytobands(
     ax.add_patch(fp)
 
 
-def create_ideogram(args: argparse.Namespace):
+def create_ideogram(args: argparse.Namespace) -> int:
     df_calls = pl.read_csv(
         args.infile,
         separator="\t",
@@ -226,3 +226,5 @@ def create_ideogram(args: argparse.Namespace):
     logger.info(f"Saving to {args.output_prefix}.(pdf|png)")
     fig.savefig(f"{args.output_prefix}.pdf", bbox_inches="tight", dpi=600)
     fig.savefig(f"{args.output_prefix}.png", bbox_inches="tight", dpi=600)
+
+    return 0
