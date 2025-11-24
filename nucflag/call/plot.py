@@ -14,6 +14,7 @@ from matplotlib.collections import PatchCollection
 from functools import lru_cache
 
 from .region import ActionOpt, Region
+from ..common import minimalize_ax
 
 PLOT_FONT_SIZE = 16
 PLOT_HEIGHT = 5
@@ -27,12 +28,6 @@ warnings.filterwarnings("ignore")
 # Set text size
 matplotlib.rcParams.update({"font.size": PLOT_FONT_SIZE})
 plt.rcParams["axes.xmargin"] = 0
-
-
-def minimalize_ax(ax: matplotlib.axes.Axes) -> None:
-    ax.xaxis.set_visible(False)
-    ax.set_yticks([], [])
-    ax.set_frame_on(False)
 
 
 @lru_cache
@@ -86,7 +81,7 @@ def plot_coverage(
         for i, (name, regions) in enumerate(overlay_regions.items()):
             # Make axis as minimal as possible.
             bed_axs: matplotlib.axes.Axes = axs[i]
-            minimalize_ax(bed_axs)
+            minimalize_ax(bed_axs, remove_ticks=True)
 
             bed_axs.set_ylabel(
                 name,
@@ -160,7 +155,7 @@ def plot_coverage(
     handles, labels = ax.get_legend_handles_labels()
     labels_handles = dict(zip(labels, handles))
     legend_cov_ax: matplotlib.axes.Axes = axs[-1]
-    minimalize_ax(legend_cov_ax)
+    minimalize_ax(legend_cov_ax, remove_ticks=True)
     legend_cov_ax.legend(
         labels_handles.values(),
         labels_handles.keys(),
@@ -180,7 +175,7 @@ def plot_coverage(
         # Remove plot elements from legend ax.
         # Offset by 1 for coverage plot.
         legend_ax: matplotlib.axes.Axes = axs[i + number_of_overlap_beds + 1]
-        minimalize_ax(legend_ax)
+        minimalize_ax(legend_ax, remove_ticks=True)
 
         # Filter rectangle patches.
         sp_patch_labels = set()

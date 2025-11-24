@@ -11,36 +11,10 @@ import polars as pl
 from matplotlib.colors import rgb2hex
 from intervaltree import Interval  # type: ignore[import-untyped]
 
+from ..common import BED9_COLS, STATUSES
 from .region import Action, ActionOpt, Region
 
 logger = logging.getLogger(__name__)
-
-BED9_COLS = [
-    ("#chrom", pl.String),
-    ("chromStart", pl.UInt64),
-    ("chromEnd", pl.UInt64),
-    ("name", pl.String),
-    ("score", pl.UInt64),
-    ("strand", pl.String),
-    ("thickStart", pl.UInt64),
-    ("thickEnd", pl.UInt64),
-    ("itemRgb", pl.String),
-]
-STATUSES = [
-    "correct",
-    "indel",
-    "softclip",
-    "het_mismap",
-    "collapse",
-    "misjoin",
-    "mismatch",
-    "false_dup",
-    "homopolymer",
-    "dinucleotide",
-    "simple",
-    "other",
-    "scaffold",
-]
 
 
 def read_bed_file(
@@ -151,6 +125,74 @@ def write_bigwig(
                 bw.addEntries(chrom, start, values=values, span=1, step=1)
 
 
+def generate_status_from_regions(df_region: pl.DataFrame) -> pl.DataFrame:
+    # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
+    df_region_grp = (
+        df_region.sort(by=["#chrom", "chromStart"])
+        .with_columns(
+            length=pl.col("chromEnd") - pl.col("chromStart"),
+            group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
+            .fill_null(False)
+            .rle_id()
+            .over("#chrom"),
+        )
+        .with_columns(
+            group=pl.when(pl.col("group") % 2 != 0)
+            .then(pl.col("group") - 1)
+            .otherwise(pl.col("group"))
+            .over("#chrom")
+        )
+    )
+    return (
+        df_region_grp.with_columns(
+            minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
+            maxEnd=pl.col("chromEnd").max().over(["#chrom", "group"]),
+        )
+        .group_by(["#chrom", "name", "group"])
+        .agg(
+            chromStart=pl.col("minStart").first(),
+            chromEnd=pl.col("maxEnd").first(),
+            perc=(
+                pl.col("length").sum()
+                / (pl.col("maxEnd").first() - pl.col("minStart").first())
+            )
+            * 100.0,
+        )
+        .pivot(
+            on="name",
+            index=["#chrom", "chromStart", "chromEnd"],
+            values="perc",
+            maintain_order=True,
+        )
+        # Ensure column exists.
+        # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
+        .with_columns(
+            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
+        )
+        .with_columns(
+            # Ensure column exists.
+            # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
+            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
+        )
+        .with_columns(
+            status=pl.when(pl.col("correct") == 100.0)
+            .then(pl.lit("correct"))
+            .otherwise(pl.lit("misassembled")),
+        )
+        .select(
+            pl.col("#chrom"),
+            pl.col("chromStart"),
+            pl.col("chromEnd"),
+            pl.col("status"),
+            *[pl.col(status) for status in STATUSES],
+        )
+        .fill_null(0.0)
+        # chromStart and chromEnd get cast to float for some reason.
+        .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
+        .sort(by=["#chrom", "chromStart"])
+    )
+
+
 def write_output(
     output_regions: TextIO | list[pl.DataFrame],
     output_status: TextIO | None,
@@ -187,62 +229,5 @@ def write_output(
     if not output_status:
         return
 
-    # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
-    df_status = (
-        df_region.with_columns(
-            length=pl.col("chromEnd") - pl.col("chromStart"),
-            group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
-            .fill_null(False)
-            .rle_id()
-            .over("#chrom"),
-        )
-        .with_columns(
-            group=pl.when(pl.col("group") % 2 != 0)
-            .then(pl.col("group") - 1)
-            .otherwise(pl.col("group"))
-            .over("#chrom")
-        )
-        .with_columns(
-            minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
-            maxEnd=pl.col("chromEnd").max().over(["#chrom", "group"]),
-        )
-        .group_by(["#chrom", "name", "group"])
-        .agg(
-            chromStart=pl.col("minStart").first(),
-            chromEnd=pl.col("maxEnd").first(),
-            perc=(
-                pl.col("length").sum()
-                / (pl.col("maxEnd").first() - pl.col("minStart").first())
-            )
-            * 100.0,
-        )
-        .pivot(
-            on="name",
-            index=["#chrom", "chromStart", "chromEnd"],
-            values="perc",
-            maintain_order=True,
-        )
-        # Ensure column exists.
-        # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
-        .with_columns(
-            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
-        )
-        .with_columns(
-            status=pl.when(pl.col("correct") == 100.0)
-            .then(pl.lit("correct"))
-            .otherwise(pl.lit("misassembled")),
-        )
-        .select(
-            pl.col("#chrom"),
-            pl.col("chromStart"),
-            pl.col("chromEnd"),
-            pl.col("status"),
-            *[pl.col(status) for status in STATUSES],
-        )
-        .fill_null(0.0)
-        # chromStart and chromEnd get cast to float for some reason.
-        .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
-    )
-    df_status.sort(by="#chrom").write_csv(
-        file=output_status, include_header=True, separator="\t"
-    )
+    df_status = generate_status_from_regions(df_region)
+    df_status.write_csv(file=output_status, include_header=True, separator="\t")
