@@ -4,3 +4,4 @@ polars>=1.6.0
 intervaltree>=3.1.0
 py-nucflag>=0.1.4
 pyBigWig>=0.3.24
+pyideogram>=0.1.0
