@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import time
+import pprint
 import random
 import logging
 import tomllib
@@ -29,7 +30,7 @@ from .region import (
     add_misassemblies_overlay_region,
 )
 
-from py_nucflag import run_nucflag_itv, get_regions, print_config_from_preset  # type: ignore[import-untyped]
+from py_nucflag import run_nucflag_itv, get_regions, get_config_from_preset  # type: ignore[import-untyped]
 
 # Get the logger
 logger = logging.getLogger(__name__)
@@ -183,7 +184,9 @@ def call_assemblies(args: argparse.Namespace) -> int:
         window = DEFAULT_WG_WINDOW
 
     # Print config to stderr.
-    print_config_from_preset(args.preset, args.config)
+    config_str = get_config_from_preset(args.preset, args.config)
+    cfg = tomllib.loads(config_str)
+    logger.info(f"Using config:\n{pprint.pformat(cfg, underscore_numbers=True)}")
 
     regions: list[tuple[int, int, str]] = get_regions(
         aln=args.infile,
