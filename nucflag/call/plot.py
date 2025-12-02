@@ -135,18 +135,22 @@ def plot_coverage(
         )
         ax = axs[0]
 
-    for typ, color, label in (
-        ("indel", "purple", "Indels"),
-        ("mismatch", "red", "Mismatches"),
-        ("cov", "black", "Coverage"),
+    # TODO: Dedup at some point
+    for typ, markercolor, color, label in (
+        ("insertion", "#800080", "#800080", "Insertions"),
+        ("deletion", "#f8f4ff", "#000000", "Deletions"),
+        ("mismatch", "#ff0000", "#ff0000", "Mismatches"),
+        ("cov", "#000000", "#000000", "Coverage"),
     ):
         ax.plot(
             df_pileup["pos"],
             df_pileup[typ],
             marker="o",
             linestyle="None",
-            markersize=2,
             color=color,
+            markersize=2,
+            markeredgewidth=0.2,
+            markerfacecolor=markercolor,
             label=label,
         )
 

@@ -15,7 +15,8 @@ BED9_COLS = [
 
 STATUSES = (
     "correct",
-    "indel",
+    "insertion",
+    "deletion",
     "softclip",
     "het_mismap",
     "collapse",

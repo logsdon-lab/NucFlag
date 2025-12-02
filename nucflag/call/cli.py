@@ -73,7 +73,7 @@ def add_call_cli(parser: SubArgumentParser) -> None:
     output_args.add_argument(
         "--add_pileup_data",
         nargs="*",
-        choices=["cov", "mismatch", "mapq", "indel", "softclip"],
+        choices=["cov", "mismatch", "mapq", "insertion", "deletion", "softclip"],
         default=["cov", "mismatch"],
         help="Add these pileup data types as bigWigs to --output_pileup_dir.",
     )
