@@ -39,6 +39,9 @@ def create_breakdown_plot(args: argparse.Namespace) -> int:
         .sort(by="length", descending=True)["#chrom"]
         .unique(maintain_order=True)
     )
+    if chrom_names.is_empty():
+        return 1
+
     df_fai = df_fai.filter(pl.col("#chrom").is_in(chrom_names)).cast(
         {"#chrom": pl.Enum(chrom_names)}
     )

@@ -119,6 +119,8 @@ def create_ideogram(args: argparse.Namespace) -> int:
         .unique(maintain_order=True)
     )
     logger.info(f"Plotting {len(chrom_names)} chromosomes.")
+    if chrom_names.is_empty():
+        return 1
 
     # chrom, calls, spacer
     base_height_ratios = [1.0, 0.66]

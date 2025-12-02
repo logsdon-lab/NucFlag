@@ -35,5 +35,14 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
     for spine in ["left", "right", "bottom", "top"]:
         ax.spines[spine].set_visible(False)
     if remove_ticks:
-        ax.set_xticks([], [])
-        ax.set_yticks([], [])
+        ax.tick_params(
+            axis="both",
+            left=False,
+            top=False,
+            right=False,
+            bottom=False,
+            labelleft=False,
+            labeltop=False,
+            labelright=False,
+            labelbottom=False,
+        )
