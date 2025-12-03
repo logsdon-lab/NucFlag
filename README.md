@@ -45,9 +45,16 @@ nucflag call -i asm.bam -f asm.fa.gz -d plots \
 bigwigmerge -l <(find bigwigs -name "*_first.bw") merged_first.bw
 ```
 
-Generate status showing breakdown of assembly issues.
+Generate status BED or breakdown showing distribution of assembly issues.
 ```bash
 nucflag status -i misassemblies.bed > status.bed
+# Or plot by "length"
+nucflag breakdown -i misassemblies.bed -o breakdown -t percent
+```
+
+Estimate QV from BED file.
+```bash
+nucflag qv -i misassemblies.bed > qv.bed
 ```
 
 Generate ideogram.

@@ -7,6 +7,7 @@ import argparse
 from .call import add_call_cli, add_status_cli, call_assemblies, create_status
 from .ideogram import add_ideogram_cli, create_ideogram
 from .breakdown import add_breakdown_cli, create_breakdown_plot
+from .qv import add_qv_cli, calculate_qv
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -33,6 +34,7 @@ def main() -> int:
     add_status_cli(sub_ap)
     add_ideogram_cli(sub_ap)
     add_breakdown_cli(sub_ap)
+    add_qv_cli(sub_ap)
 
     args = ap.parse_args()
 
@@ -44,6 +46,8 @@ def main() -> int:
         return create_ideogram(args)
     elif args.cmd == "breakdown":
         return create_breakdown_plot(args)
+    elif args.cmd == "qv":
+        return calculate_qv(args)
     else:
         ap.print_help(sys.stderr)
         return 1

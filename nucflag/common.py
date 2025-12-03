@@ -46,3 +46,26 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
             labelright=False,
             labelbottom=False,
         )
+
+
+def add_group_columns(df_region: pl.DataFrame) -> pl.DataFrame:
+    return (
+        df_region.sort(by=["#chrom", "chromStart"])
+        .with_columns(
+            group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
+            .fill_null(False)
+            .rle_id()
+            .over("#chrom"),
+        )
+        .with_columns(
+            group=pl.when(pl.col("group") % 2 != 0)
+            .then(pl.col("group") - 1)
+            .otherwise(pl.col("group"))
+            .over("#chrom")
+        )
+        .with_columns(
+            length=pl.col("chromEnd") - pl.col("chromStart"),
+            minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
+            maxEnd=pl.col("chromEnd").max().over(["#chrom", "group"]),
+        )
+    )
