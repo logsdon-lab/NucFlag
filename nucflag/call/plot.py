@@ -192,7 +192,11 @@ def plot_coverage(
             sp_patch_labels.add(patch_lbl)
 
         # Sort patches by label.
-        sp_filtered_patches.sort(key=lambda p: str(p.get_label()))
+        # Special exception for MAPQ since it's a range and cannot sort lexographically. ex. 5-10 and 50-55
+        if name == "MAPQ":
+            sp_filtered_patches.sort(key=lambda p: str(p.get_label()).split("-")[0])
+        else:
+            sp_filtered_patches.sort(key=lambda p: str(p.get_label()))
 
         legend_ax.legend(
             handles=sp_filtered_patches,

@@ -151,11 +151,6 @@ def generate_status_from_regions(df_region: pl.DataFrame) -> pl.DataFrame:
             **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
         )
         .with_columns(
-            # Ensure column exists.
-            # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
-            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
-        )
-        .with_columns(
             status=pl.when(pl.col("correct") == 100.0)
             .then(pl.lit("correct"))
             .otherwise(pl.lit("misassembled")),
