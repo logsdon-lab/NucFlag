@@ -8,6 +8,7 @@ from .call import add_call_cli, add_status_cli, call_assemblies, create_status
 from .ideogram import add_ideogram_cli, create_ideogram
 from .breakdown import add_breakdown_cli, create_breakdown_plot
 from .qv import add_qv_cli, calculate_qv
+from .consensus import add_consensus_cli, get_consensus_calls
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -35,6 +36,7 @@ def main() -> int:
     add_ideogram_cli(sub_ap)
     add_breakdown_cli(sub_ap)
     add_qv_cli(sub_ap)
+    add_consensus_cli(sub_ap)
 
     args = ap.parse_args()
 
@@ -48,6 +50,8 @@ def main() -> int:
         return create_breakdown_plot(args)
     elif args.cmd == "qv":
         return calculate_qv(args)
+    elif args.cmd == "consensus":
+        return get_consensus_calls(args)
     else:
         ap.print_help(sys.stderr)
         return 1
