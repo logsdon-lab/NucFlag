@@ -32,16 +32,7 @@ INFILES = (
             for typ in ("A", "B", "A_B")
         ],
         # Filter calls
-        (INFILES, f"test/{COMMAND}/expected/filter_calls.bed{GZIP}", ["-f", "Dup"]),
-        # Relative to call
-        *[
-            (
-                INFILES,
-                f"test/{COMMAND}/expected/relative_to_{i}.bed{GZIP}",
-                ["-r", str(i)],
-            )
-            for i in range(len(INFILES))
-        ],
+        (INFILES, f"test/{COMMAND}/expected/filter_calls.bed{GZIP}", ["-g", "Dup"]),
     ],
 )
 def test_consensus(infiles, expected, added_flags):

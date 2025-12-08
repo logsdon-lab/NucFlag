@@ -18,17 +18,15 @@ from ..common import BED9_COLS
 def get_consensus_calls(args: argparse.Namespace) -> int:
     files: list[TextIO] = args.infiles
 
-    filter_calls = set(GOOD_REGIONS)
-    if args.filter_calls:
-        filter_calls.update(args.filter_calls)
+    ignore_calls = set(GOOD_REGIONS)
+    if args.ignore_calls:
+        ignore_calls.update(args.ignore_calls)
 
     assert len(files) > 1, f"Only one file ({[file.name for file in files]}) provided."
 
-    # {chrom: {file: IntervalTree[Interval[start, end, name]]}}
-    itree_calls: defaultdict[str, defaultdict[int, IntervalTree]] = defaultdict(
-        lambda: defaultdict(IntervalTree)
-    )
-    for i, file in enumerate(files):
+    # {chrom: IntervalTree[Interval[start, end, name]]}
+    itree_calls: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
+    for file in files:
         df_call = pl.read_csv(
             file,
             separator="\t",
@@ -38,9 +36,9 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
             schema=dict(BED9_COLS[0:4]),
             truncate_ragged_lines=True,
         )
-        df_call = df_call.filter(~pl.col("name").is_in(filter_calls))
+        df_call = df_call.filter(~pl.col("name").is_in(ignore_calls))
         for call in df_call.iter_rows(named=True):
-            itree_calls[call["#chrom"]][i].add(
+            itree_calls[call["#chrom"]].add(
                 Interval(call["chromStart"], call["chromEnd"], call["name"])
             )
 
@@ -79,33 +77,21 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
         norm = matplotlib.colors.Normalize(vmin=1, vmax=10)
 
     # Determine order based on number of calls or chosen index.
-    for chrom, file_itrees in itree_calls.items():
-        if args.relative_to:
-            idx_file_w_max_calls = args.relative_to
-        else:
-            idx_file_w_max_calls = max(
-                file_itrees.items(), key=lambda itree: len(itree[1])
-            )[0]
+    all_itvs = IntervalTree()
 
-        if not file_itrees.get(idx_file_w_max_calls):
-            raise ValueError(
-                f"Invalid index ({idx_file_w_max_calls}) for number of files: {len(file_itrees)}"
-            )
+    # Reduce overlapping intervals
+    def data_reducer(
+        curr: tuple[set[str], int, str], new: tuple[set[str], int, str]
+    ) -> tuple[set[str], int, str]:
+        return (curr[0].union(new[0]), max(curr[1], new[1]), curr[2])
 
-        idx_other_calls = set(file_itrees.keys()).difference([idx_file_w_max_calls])
-
-        # Store name + idx of callset in interval
-        all_other_calls = IntervalTree(
-            Interval(itv.begin, itv.end, (itv.data, idx))
-            for idx in idx_other_calls
-            for itv in file_itrees[idx]
-        )
+    for chrom, itrees in itree_calls.items():
         itv: Interval
         ovl: set[Interval]
-        for itv in file_itrees[idx_file_w_max_calls].iter():
+        for itv in itrees.iter():
             # a - itv
-            ovl = all_other_calls.overlap(itv)
-
+            ovl = itrees.overlap(itv)
+            ovl.remove(itv)
             # Check overlaps to ensure meets overlap criteria.
             if ovl and args.perc_ovl and fn_ovl_check:
                 itv_len = itv.length()
@@ -117,31 +103,43 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
                     b_a_ovl_frac = ovl_itv_len / itv_len
                     is_valid, ovl_frac = fn_ovl_check(a_b_ovl_frac, b_a_ovl_frac)
                     if is_valid:
-                        # (name, file_index, ovl_frac)
-                        mdata: tuple[str, int, str] = (*ovl_itv.data, ovl_frac)
+                        # (name, ovl_frac)
+                        mdata: tuple[str, str] = (ovl_itv.data, ovl_frac)
                         valid_itv = Interval(ovl_itv.begin, ovl_itv.end, mdata)
                         new_ovl.add(valid_itv)
 
                 ovl = new_ovl
 
-            valid_n = len(ovl) + 1 >= args.number_ovl
+            valid_n = len(ovl) + 1 >= args.total_number_ovl
             if not valid_n:
                 continue
 
-            ovl_names = f"{itv.data},{','.join(oitv.data[0] for oitv in ovl)}"
             # Color by average overlap percent
             # Or number of overlaps
             if args.perc_ovl:
-                ovl_avg = int(statistics.mean([oitv.data[2] for oitv in ovl]) * 100)
+                ovl_avg = int(statistics.mean([oitv.data[1] for oitv in ovl]) * 100)
+                ovl_names = set(oitv.data[0] for oitv in ovl)
             else:
+                ovl_names = set(oitv.data for oitv in ovl)
                 ovl_avg = len(ovl) + 1
 
+            # Add current
+            ovl_names.add(itv.data)
             color = cmap(norm(ovl_avg))
+            rgb = ",".join(str(int(c * 255)) for c in color[0:3])
+            all_itvs.add(Interval(itv.begin, itv.end, (ovl_names, ovl_avg, rgb)))
+
+        # Merge overlaps
+        all_itvs.merge_overlaps(
+            data_reducer=data_reducer,
+        )
+        for itv in sorted(all_itvs):
+            ovl_names, ovl_avg, rgb = itv.data
             row = (
                 chrom,
                 str(itv.begin),
                 str(itv.end),
-                ovl_names,
+                ",".join(sorted(ovl_names)),
                 ".",
                 str(ovl_avg),
                 str(itv.begin),

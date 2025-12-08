@@ -27,7 +27,7 @@ def add_consensus_cli(parser: SubArgumentParser) -> None:
     )
     ap.add_argument(
         "-n",
-        "--number_ovl",
+        "--total_number_ovl",
         type=int,
         default=2,
         help="Number of overlaps across all --infiles to be considered true.",
@@ -37,7 +37,7 @@ def add_consensus_cli(parser: SubArgumentParser) -> None:
         "--perc_ovl",
         type=float,
         default=None,
-        help="Required overlap as percentage (0.8 => 80 percent overlap) to be considered true. Provide value for stricter callsets. If None, any overlap is considered true.",
+        help="Required overlap for each call as percentage (0.8 => 80 percent overlap) to be considered true. Provide value for stricter callsets. If None, any overlap is considered true.",
     )
     ap.add_argument(
         "-t",
@@ -48,18 +48,11 @@ def add_consensus_cli(parser: SubArgumentParser) -> None:
         choices=["A", "B", "A_B"],
     )
     ap.add_argument(
-        "-f",
-        "--filter_calls",
+        "-g",
+        "--ignore_calls",
         type=str,
         nargs="*",
-        help=f"Calls to filter out. Typically good calls: {GOOD_REGIONS}.",
-    )
-    ap.add_argument(
-        "-r",
-        "--relative_to",
-        default=None,
-        type=int,
-        help="Index of infile to use as reference. Defaults to file with the largest number of calls.",
+        help=f"Calls to ignore. Typically good calls: {GOOD_REGIONS}.",
     )
     ap.add_argument(
         "-o",

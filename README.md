@@ -64,6 +64,11 @@ nucflag ideogram -i misassemblies.bed -o ideogram
 nucflag ideogram -i misassemblies.bed -c cytobands.bed -o ideogram
 ```
 
+Get consensus misassembly calls by intersection.
+```bash
+nucflag consensus -i nucflag_ont.bed nucflag_hifi.bed hmm_flagger_hifi.bed hmm_flagger_ont.bed > consensus.bed
+```
+
 ## Input
 * BAM file of PacBio HiFi, ONT R9, or ONT R10 reads aligned to an assembly.
 * (Recommended) Assembly.
