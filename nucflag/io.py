@@ -51,7 +51,7 @@ def read_asm_regions(
         )
     else:
         check_indexed(infile)
-        if not infile.endswith(".bam") and not infile.endswith(".cram"):
+        if not (infile.endswith(".bam") or infile.endswith(".cram")):
             raise NotImplementedError(
                 "Reading regions from coverage file not supported."
             )
