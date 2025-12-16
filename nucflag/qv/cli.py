@@ -15,7 +15,7 @@ else:
 def add_qv_cli(parser: SubArgumentParser) -> None:
     ap = parser.add_parser(
         "qv",
-        description="Calculate QV from NucFlag misassemblies",
+        description="Calculate QV from NucFlag misassemblies based on formula: -10 * math.log10(bp_err / bp_region)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument(
