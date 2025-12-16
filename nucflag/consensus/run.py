@@ -76,9 +76,6 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
     else:
         norm = matplotlib.colors.Normalize(vmin=1, vmax=10)
 
-    # Determine order based on number of calls or chosen index.
-    all_itvs = IntervalTree()
-
     # Reduce overlapping intervals
     def data_reducer(
         curr: tuple[set[str], int, str], new: tuple[set[str], int, str]
@@ -88,6 +85,8 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
     for chrom, itrees in itree_calls.items():
         itv: Interval
         ovl: set[Interval]
+        all_itvs = IntervalTree()
+
         for itv in itrees.iter():
             # a - itv
             ovl = itrees.overlap(itv)
