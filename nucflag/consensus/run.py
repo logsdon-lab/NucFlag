@@ -42,7 +42,8 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
                 Interval(
                     max(call["chromStart"] - args.dst, 0),
                     call["chromEnd"] + args.dst,
-                    call["name"],
+                    # Add filename so unique if name is same.
+                    (call["name"], file.name),
                 )
             )
 
@@ -78,7 +79,7 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
     if args.perc_ovl:
         norm = matplotlib.colors.Normalize(vmin=0, vmax=100)
     else:
-        norm = matplotlib.colors.Normalize(vmin=1, vmax=10)
+        norm = matplotlib.colors.Normalize(vmin=1, vmax=len(files))
 
     # Reduce overlapping intervals
     def data_reducer(
@@ -94,7 +95,7 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
         for itv in itrees.iter():
             # a - itv
             ovl = itrees.overlap(itv)
-            ovl.remove(itv)
+
             # Check overlaps to ensure meets overlap criteria.
             if ovl and args.perc_ovl and fn_ovl_check:
                 itv_len = itv.length()
@@ -106,28 +107,27 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
                     b_a_ovl_frac = ovl_itv_len / itv_len
                     is_valid, ovl_frac = fn_ovl_check(a_b_ovl_frac, b_a_ovl_frac)
                     if is_valid:
-                        # (name, ovl_frac)
-                        mdata: tuple[str, str] = (ovl_itv.data, ovl_frac)
+                        # (name, filename, ovl_frac)
+                        mdata: tuple[str, str, str] = (*ovl_itv.data, ovl_frac)
                         valid_itv = Interval(ovl_itv.begin, ovl_itv.end, mdata)
                         new_ovl.add(valid_itv)
 
                 ovl = new_ovl
 
-            valid_n = len(ovl) + 1 >= args.total_number_ovl
+            # Count by total file names so 2 <= valid_n <= n_files
+            valid_ovls = set(oitv.data[1] for oitv in ovl)
+            valid_n = len(valid_ovls) >= args.total_number_ovl
             if not valid_n:
                 continue
 
             # Color by average overlap percent
             # Or number of overlaps
             if args.perc_ovl:
-                ovl_avg = int(statistics.mean([oitv.data[1] for oitv in ovl]) * 100)
-                ovl_names = set(oitv.data[0] for oitv in ovl)
+                ovl_avg = int(statistics.mean([oitv.data[2] for oitv in ovl]) * 100)
             else:
-                ovl_names = set(oitv.data for oitv in ovl)
-                ovl_avg = len(ovl) + 1
+                ovl_avg = len(valid_ovls)
 
-            # Add current
-            ovl_names.add(itv.data)
+            ovl_names = set(oitv.data[0] for oitv in ovl)
             color = cmap(norm(ovl_avg))
             rgb = ",".join(str(int(c * 255)) for c in color[0:3])
             all_itvs.add(Interval(itv.begin, itv.end, (ovl_names, ovl_avg, rgb)))
@@ -138,15 +138,18 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
         )
         for itv in sorted(all_itvs):
             ovl_names, ovl_avg, rgb = itv.data
+            # Don't modify zero start if dst non-zero.
+            st = str(0 if itv.begin == 0 else itv.begin + args.dst)
+            end = str(itv.end - args.dst)
             row = (
                 chrom,
-                str(itv.begin + args.dst),
-                str(itv.end - args.dst),
+                st,
+                end,
                 ",".join(sorted(ovl_names)),
                 ".",
                 str(ovl_avg),
-                str(itv.begin),
-                str(itv.end),
+                st,
+                end,
                 ",".join(str(int(c * 255)) for c in color[0:3]),
             )
             print("\t".join(row), file=args.outfile)
