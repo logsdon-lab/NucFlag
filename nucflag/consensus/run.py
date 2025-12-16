@@ -39,7 +39,11 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
         df_call = df_call.filter(~pl.col("name").is_in(ignore_calls))
         for call in df_call.iter_rows(named=True):
             itree_calls[call["#chrom"]].add(
-                Interval(call["chromStart"], call["chromEnd"], call["name"])
+                Interval(
+                    max(call["chromStart"] - args.dst, 0),
+                    call["chromEnd"] + args.dst,
+                    call["name"],
+                )
             )
 
     if args.perc_ovl:
@@ -136,8 +140,8 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
             ovl_names, ovl_avg, rgb = itv.data
             row = (
                 chrom,
-                str(itv.begin),
-                str(itv.end),
+                str(itv.begin + args.dst),
+                str(itv.end - args.dst),
                 ",".join(sorted(ovl_names)),
                 ".",
                 str(ovl_avg),

@@ -55,6 +55,13 @@ def add_consensus_cli(parser: SubArgumentParser) -> None:
         help=f"Calls to ignore. Typically good calls: {GOOD_REGIONS}.",
     )
     ap.add_argument(
+        "-d",
+        "--dst",
+        type=int,
+        help="Distance to allow in overlap. Added to both ends of interval.",
+        default=1,
+    )
+    ap.add_argument(
         "-o",
         "--outfile",
         type=argparse.FileType("wt"),
