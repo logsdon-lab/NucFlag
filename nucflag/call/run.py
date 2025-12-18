@@ -47,6 +47,7 @@ def plot_misassemblies(
     config: str | None,
     preset: str | None,
     tracks: OrderedDict[str, set[Region]],
+    ovl_tracks: OrderedDict[str, set[Region]],
     plot_dir: str | None,
     pileup_dir: str | None,
     add_pileup_data: set[str],
@@ -105,7 +106,6 @@ def plot_misassemblies(
 
     # Plot contig.
     if plot_dir and isinstance(res.pileup, pl.DataFrame):
-        ovl_tracks = set()
         if "mapq" in add_builtin_tracks:
             logger.info(f"Adding mapq track for {ctg_coords}.")
             tracks["MAPQ"] = set(
@@ -121,7 +121,7 @@ def plot_misassemblies(
             )
 
         if overlap_calls:
-            ovl_tracks.update(add_misassemblies_overlay_region(regions))
+            ovl_tracks["Types"] = set(add_misassemblies_overlay_region(regions))
         else:
             tracks["Types"] = set(add_misassemblies_overlay_region(regions))
 
@@ -175,11 +175,19 @@ def call_assemblies(args: argparse.Namespace) -> int:
         tracks: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
             OrderedDict
         )
-        # Pass reference of overlay regions to update.
         tracks = read_overlay_regions(args.tracks)
-        logger.info(f"Overlapping {len(args.tracks)} bedfile(s).")
+        logger.info(f"Adding {len(args.tracks)} bedfile(s).")
     else:
         tracks = defaultdict(OrderedDict)
+
+    if args.overlap_tracks:
+        ovl_tracks: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
+            OrderedDict
+        )
+        ovl_tracks = read_overlay_regions(args.overlap_tracks)
+        logger.info(f"Overlapping {len(args.overlap_tracks)} bedfile(s).")
+    else:
+        ovl_tracks = defaultdict(OrderedDict)
 
     if args.config:
         with open(args.config, "rb") as fh:
@@ -227,6 +235,7 @@ def call_assemblies(args: argparse.Namespace) -> int:
             args.config,
             args.preset,
             tracks.get(rgn[2], OrderedDict()),
+            ovl_tracks.get(rgn[2], OrderedDict()),
             args.output_plot_dir,
             args.output_pileup_dir,
             added_pileup_data,

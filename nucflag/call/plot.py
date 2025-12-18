@@ -45,7 +45,7 @@ def plot_coverage(
     itv: Interval,
     df_pileup: pl.DataFrame,
     tracks: OrderedDict[str, set[Region]] | None,
-    ovl_tracks: set[Region],
+    ovl_tracks: OrderedDict[str, set[Region]] | None,
     plot_ylim: float | int = 100,
 ) -> tuple[plt.Figure, Any]:
     """
@@ -56,7 +56,7 @@ def plot_coverage(
     :param tracks: Tracks to plot
     :type tracks: OrderedDict[str, set[Region]] | None
     :param ovl_tracks: Tracks to plot on top of coverage plot.
-    :type ovl_tracks: set[Region]
+    :type ovl_tracks: OrderedDict[str, set[Region]] | None
     :param plot_ylim: Plot y-limit.
     :type plot_ylim: float | int
     :return: Figure and its axes.
@@ -166,23 +166,24 @@ def plot_coverage(
             label=label,
         )
 
-    for region in ovl_tracks:
-        if region.name == "correct":
-            continue
-        if region.action.desc:
-            color = region.action.desc
-        elif region.desc:
-            color = get_random_color(region.desc)
-        else:
-            raise ValueError(f"Region {region} has no description.")
+    for track_name, regions in ovl_tracks.items():
+        for region in regions:
+            if region.name == "correct" and track_name == "Types":
+                continue
+            if region.action.desc:
+                color = region.action.desc
+            elif region.desc:
+                color = get_random_color(region.desc)
+            else:
+                raise ValueError(f"Region {region} has no description.")
 
-        ax.axvspan(
-            region.region.begin,
-            region.region.end,
-            color=color,
-            alpha=0.4,
-            label=region.name,
-        )
+            ax.axvspan(
+                region.region.begin,
+                region.region.end,
+                color=color,
+                alpha=0.4,
+                label=region.desc,
+            )
 
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073
