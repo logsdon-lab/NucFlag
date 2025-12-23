@@ -14,3 +14,4 @@ Snakefile
 results/
 *.xml
 igv/
+example*/

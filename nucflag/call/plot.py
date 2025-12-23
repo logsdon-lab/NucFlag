@@ -117,7 +117,10 @@ def plot_coverage(
 
                 if not row.action or (row.action and row.action.opt != ActionOpt.PLOT):
                     continue
-                width = row.region.length()
+
+                region_st = max(itv.begin, row.region.begin)
+                region_end = min(itv.end, row.region.end)
+                width = region_end - region_st
                 # Use color provided. Default to random generated ones otherwise.
                 color: str | tuple[float, float, float]
                 if row.action.desc:
@@ -128,7 +131,7 @@ def plot_coverage(
                     raise ValueError(f"Region {row} has no description.")
 
                 rect = ptch.Rectangle(
-                    (row.region.begin, 0),
+                    (region_st, 0),
                     width,
                     ylim,
                     linewidth=1,
@@ -177,9 +180,14 @@ def plot_coverage(
             else:
                 raise ValueError(f"Region {region} has no description.")
 
+            if not region.region.overlaps(itv):
+                continue
+
+            region_st = max(itv.begin, region.region.begin)
+            region_end = min(itv.end, region.region.end)
             ax.axvspan(
-                region.region.begin,
-                region.region.end,
+                region_st,
+                region_end,
                 color=color,
                 alpha=0.4,
                 label=region.desc,
