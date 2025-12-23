@@ -44,19 +44,35 @@ def get_random_color(name: str) -> str:
 def plot_coverage(
     itv: Interval,
     df_pileup: pl.DataFrame,
-    overlay_regions: OrderedDict[str, set[Region]] | None,
+    tracks: OrderedDict[str, set[Region]] | None,
+    ovl_tracks: OrderedDict[str, set[Region]] | None,
     plot_ylim: float | int = 100,
 ) -> tuple[plt.Figure, Any]:
+    """
+    :param itv: Interval to plot
+    :type itv: Interval
+    :param df_pileup: Pileup dataframe
+    :type df_pileup: pl.DataFrame
+    :param tracks: Tracks to plot
+    :type tracks: OrderedDict[str, set[Region]] | None
+    :param ovl_tracks: Tracks to plot on top of coverage plot.
+    :type ovl_tracks: OrderedDict[str, set[Region]] | None
+    :param plot_ylim: Plot y-limit.
+    :type plot_ylim: float | int
+    :return: Figure and its axes.
+    :rtype: tuple[Figure, Any]
+    """
+
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
-    number_of_overlap_beds = len(overlay_regions.keys()) if overlay_regions else 0
-    if overlay_regions:
+    number_of_overlap_beds = len(tracks.keys()) if tracks else 0
+    if tracks:
         fig, axs = plt.subplots(
             # | ---------- |
             # | \/\__/\||/ |
             # | bed_legend |
             # | cov_legend |
             # nrows (n for bed, 1 for the coverage plot, n for bed legends, and 1 for coverage plot legend)
-            len(overlay_regions.keys()) + 1 + len(overlay_regions.keys()) + 1,
+            len(tracks.keys()) + 1 + len(tracks.keys()) + 1,
             # ncols
             1,
             figsize=(
@@ -78,7 +94,7 @@ def plot_coverage(
         # Last axis with coverage plt.
         ax: matplotlib.axes.Axes = axs[number_of_overlap_beds]
         # Add bed regions.
-        for i, (name, regions) in enumerate(overlay_regions.items()):
+        for i, (name, regions) in enumerate(tracks.items()):
             # Make axis as minimal as possible.
             bed_axs: matplotlib.axes.Axes = axs[i]
             minimalize_ax(bed_axs, remove_ticks=True)
@@ -101,7 +117,10 @@ def plot_coverage(
 
                 if not row.action or (row.action and row.action.opt != ActionOpt.PLOT):
                     continue
-                width = row.region.length()
+
+                region_st = max(itv.begin, row.region.begin)
+                region_end = min(itv.end, row.region.end)
+                width = region_end - region_st
                 # Use color provided. Default to random generated ones otherwise.
                 color: str | tuple[float, float, float]
                 if row.action.desc:
@@ -112,7 +131,7 @@ def plot_coverage(
                     raise ValueError(f"Region {row} has no description.")
 
                 rect = ptch.Rectangle(
-                    (row.region.begin, 0),
+                    (region_st, 0),
                     width,
                     ylim,
                     linewidth=1,
@@ -153,6 +172,30 @@ def plot_coverage(
             markerfacecolor=markercolor,
             label=label,
         )
+
+    for track_name, regions in ovl_tracks.items():
+        for region in regions:
+            if region.name == "correct" and track_name == "Types":
+                continue
+            if region.action.desc:
+                color = region.action.desc
+            elif region.desc:
+                color = get_random_color(region.desc)
+            else:
+                raise ValueError(f"Region {region} has no description.")
+
+            if not region.region.overlaps(itv):
+                continue
+
+            region_st = max(itv.begin, region.region.begin)
+            region_end = min(itv.end, region.region.end)
+            ax.axvspan(
+                region_st,
+                region_end,
+                color=color,
+                alpha=0.4,
+                label=region.desc,
+            )
 
     # Add legend for coverage plot in separate axis. Deduplicate multiple labels.
     # https://stackoverflow.com/a/36189073

@@ -35,8 +35,8 @@ Visualize misassemblies in a number of ways.
 ```bash
 # Generate NucFreq plots.
 nucflag call -i asm.bam -f asm.fa.gz -d plots
-# And overlay any number of tracks...
-nucflag call -i asm.bam -f asm.fa.gz -d plots --overlay_regions repeatmasker.bed segdups.bed
+# And add any number of tracks...
+nucflag call -i asm.bam -f asm.fa.gz -d plots --tracks repeatmasker.bed segdups.bed
 # Or generate bigWigs of specific signals and then merge them with `bigtools`.
 # For use in IGV or other genome browsers.
 nucflag call -i asm.bam -f asm.fa.gz -d plots \

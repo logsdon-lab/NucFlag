@@ -114,16 +114,28 @@ def add_call_cli(parser: SubArgumentParser) -> None:
     )
     plot_args = ap.add_argument_group(title="Plot", description="Plot arguments.")
     plot_args.add_argument(
-        "--overlay_regions",
+        "--tracks",
         nargs="*",
         type=argparse.FileType("rt"),
-        help="Overlay additional regions as BED4 or BED9 alongside coverage plot.",
+        help="Add additional regions as BED4 or BED9 on top of coverage plot.",
+    )
+    plot_args.add_argument(
+        "--overlap_tracks",
+        nargs="*",
+        type=argparse.FileType("rt"),
+        help="Add additional regions as BED4 or BED9 overlapping coverage plot.",
     )
     plot_args.add_argument(
         "--add_builtin_tracks",
         nargs="*",
         choices=["mapq", "bin"],
         help="Add built-in tracks used in nucflag as overlay tracks.",
+    )
+    plot_args.add_argument(
+        "--overlap_calls",
+        dest="overlap_calls",
+        action="store_true",
+        help="Overlap NucFlag calls with coverage plot instead of adding as separate track. Similar to original NucFlag < v1.0. Correct regions are not displayed."
     )
     plot_args.add_argument(
         "--ylim",

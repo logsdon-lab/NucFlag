@@ -46,12 +46,14 @@ def plot_misassemblies(
     threads: int,
     config: str | None,
     preset: str | None,
-    overlay_regions: OrderedDict[str, set[Region]],
+    tracks: OrderedDict[str, set[Region]],
+    ovl_tracks: OrderedDict[str, set[Region]],
     plot_dir: str | None,
     pileup_dir: str | None,
     add_pileup_data: set[str],
     add_builtin_tracks: set[str],
     ignore_mtypes: list[str],
+    overlap_calls: bool,
     ylim: int | float,
 ) -> pl.DataFrame:
     # Safer logging. Each itv should be unique so no hash collisions?
@@ -106,25 +108,29 @@ def plot_misassemblies(
     if plot_dir and isinstance(res.pileup, pl.DataFrame):
         if "mapq" in add_builtin_tracks:
             logger.info(f"Adding mapq track for {ctg_coords}.")
-            overlay_regions["MAPQ"] = set(
+            tracks["MAPQ"] = set(
                 add_mapq_overlay_region(ctg, res.pileup.select("pos", "mapq"))
             )
 
         if "bin" in add_builtin_tracks:
             logger.info(f"Adding bin track for {ctg_coords}.")
-            overlay_regions["Structure"] = set(
+            tracks["Structure"] = set(
                 add_bin_overlay_region(
                     ctg, res.pileup.select("pos", "bin", "bin_ident")
                 )
             )
 
-        overlay_regions["Types"] = set(add_misassemblies_overlay_region(regions))
+        if overlap_calls:
+            ovl_tracks["Types"] = set(add_misassemblies_overlay_region(regions))
+        else:
+            tracks["Types"] = set(add_misassemblies_overlay_region(regions))
 
         logger.info(f"Plotting {ctg_coords}.")
         _ = plot_coverage(
             itv=Interval(st, end, ctg),
             df_pileup=res.pileup,
-            overlay_regions=overlay_regions,
+            tracks=tracks,
+            ovl_tracks=ovl_tracks,
             plot_ylim=ylim,
         )
 
@@ -165,15 +171,23 @@ def call_assemblies(args: argparse.Namespace) -> int:
         ignore_bed = tmpfile_ignore_bed
 
     # Load additional regions to overlay and ignore.
-    if args.overlay_regions:
-        overlay_regions: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
+    if args.tracks:
+        tracks: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
             OrderedDict
         )
-        # Pass reference of overlay regions to update.
-        overlay_regions = read_overlay_regions(args.overlay_regions)
-        logger.info(f"Overlapping {len(args.overlay_regions)} bedfile(s).")
+        tracks = read_overlay_regions(args.tracks)
+        logger.info(f"Adding {len(args.tracks)} bedfile(s).")
     else:
-        overlay_regions = defaultdict(OrderedDict)
+        tracks = defaultdict(OrderedDict)
+
+    if args.overlap_tracks:
+        ovl_tracks: defaultdict[str, OrderedDict[str, set[Region]]] = defaultdict(
+            OrderedDict
+        )
+        ovl_tracks = read_overlay_regions(args.overlap_tracks)
+        logger.info(f"Overlapping {len(args.overlap_tracks)} bedfile(s).")
+    else:
+        ovl_tracks = defaultdict(OrderedDict)
 
     if args.config:
         with open(args.config, "rb") as fh:
@@ -220,12 +234,14 @@ def call_assemblies(args: argparse.Namespace) -> int:
             args.threads,
             args.config,
             args.preset,
-            overlay_regions.get(rgn[2], OrderedDict()),
+            tracks.get(rgn[2], OrderedDict()),
+            ovl_tracks.get(rgn[2], OrderedDict()),
             args.output_plot_dir,
             args.output_pileup_dir,
             added_pileup_data,
             added_builtin_tracks,
             ignore_mtypes,
+            args.overlap_calls,
             args.ylim,
         ]
         for rgn in regions
