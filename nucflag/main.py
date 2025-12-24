@@ -4,7 +4,7 @@ import time
 import logging
 import argparse
 
-from .call import add_call_cli, add_status_cli, call_assemblies, create_status
+from .call import add_call_cli, add_status_cli, call_misassemblies, create_status
 from .ideogram import add_ideogram_cli, create_ideogram
 from .breakdown import add_breakdown_cli, create_breakdown_plot
 from .qv import add_qv_cli, calculate_qv
@@ -41,7 +41,7 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.cmd == "call":
-        return call_assemblies(args)
+        return call_misassemblies(args)
     elif args.cmd == "status":
         return create_status(args)
     elif args.cmd == "ideogram":

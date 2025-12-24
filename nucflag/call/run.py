@@ -151,7 +151,7 @@ def plot_misassemblies(
     return regions
 
 
-def call_assemblies(args: argparse.Namespace) -> int:
+def call_misassemblies(args: argparse.Namespace) -> int:
     if args.output_plot_dir:
         os.makedirs(args.output_plot_dir, exist_ok=True)
     if args.output_pileup_dir:

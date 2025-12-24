@@ -44,8 +44,8 @@ def get_random_color(name: str) -> str:
 def plot_coverage(
     itv: Interval,
     df_pileup: pl.DataFrame,
-    tracks: OrderedDict[str, set[Region]] | None,
-    ovl_tracks: OrderedDict[str, set[Region]] | None,
+    tracks: OrderedDict[str, set[Region]],
+    ovl_tracks: OrderedDict[str, set[Region]],
     plot_ylim: float | int = 100,
 ) -> tuple[plt.Figure, Any]:
     """
@@ -54,15 +54,16 @@ def plot_coverage(
     :param df_pileup: Pileup dataframe
     :type df_pileup: pl.DataFrame
     :param tracks: Tracks to plot
-    :type tracks: OrderedDict[str, set[Region]] | None
+    :type tracks: OrderedDict[str, set[Region]]
     :param ovl_tracks: Tracks to plot on top of coverage plot.
-    :type ovl_tracks: OrderedDict[str, set[Region]] | None
+    :type ovl_tracks: OrderedDict[str, set[Region]]
     :param plot_ylim: Plot y-limit.
     :type plot_ylim: float | int
     :return: Figure and its axes.
     :rtype: tuple[Figure, Any]
     """
 
+    color: str | None
     subplot_patches: dict[str, list[ptch.Rectangle]] = {}
     number_of_overlap_beds = len(tracks.keys()) if tracks else 0
     if tracks:
@@ -122,7 +123,6 @@ def plot_coverage(
                 region_end = min(itv.end, row.region.end)
                 width = region_end - region_st
                 # Use color provided. Default to random generated ones otherwise.
-                color: str | tuple[float, float, float]
                 if row.action.desc:
                     color = row.action.desc
                 elif row.desc:
@@ -177,7 +177,7 @@ def plot_coverage(
         for region in regions:
             if region.name == "correct" and track_name == "Types":
                 continue
-            if region.action.desc:
+            if region.action:
                 color = region.action.desc
             elif region.desc:
                 color = get_random_color(region.desc)
