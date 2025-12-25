@@ -91,14 +91,17 @@ def write_bigwig(
     df_pileup: pl.DataFrame, chrom_lengths: str, columns: list[str], output_dir: str
 ):
     chrom = df_pileup["chrom"][0]
-    start = df_pileup["pos"][0]
+    start = max(0, df_pileup["pos"][0] - 1)
+    end = df_pileup["pos"][-1]
+    chrom_coords = f"{chrom}_{start}-{end}"
+
     if not os.path.exists(chrom_lengths):
         logging.warning(
             f"Chromosome lengths are required to generate bigWig files for {chrom}. Generating wig files."
         )
         for col in columns:
             with gzip.open(
-                os.path.join(output_dir, f"{chrom}_{col}.wig.gz"), "wb"
+                os.path.join(output_dir, f"{chrom_coords}_{col}.wig.gz"), "wb"
             ) as fh:
                 df_values = (
                     df_pileup.select(col)
@@ -117,7 +120,7 @@ def write_bigwig(
 
         header = list(df_chrom_lengths.iter_rows())
         for col in columns:
-            outfile = os.path.join(output_dir, f"{chrom}_{col}.bw")
+            outfile = os.path.join(output_dir, f"{chrom_coords}_{col}.bw")
             with pyBigWig.open(outfile, "w") as bw:
                 # https://github.com/deeptools/pyBigWig/issues/126
                 bw.addHeader(header)
