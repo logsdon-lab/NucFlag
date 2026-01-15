@@ -29,6 +29,7 @@ STATUSES = (
     "other_repeat",
     "scaffold",
 )
+PRESETS = ("ont_r9", "ont_r10", "hifi")
 
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:

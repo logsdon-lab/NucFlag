@@ -4,11 +4,14 @@ import time
 import logging
 import argparse
 
+from importlib.metadata import version
+
 from .call import add_call_cli, add_status_cli, call_misassemblies, create_status
 from .ideogram import add_ideogram_cli, create_ideogram
 from .breakdown import add_breakdown_cli, create_breakdown_plot
 from .qv import add_qv_cli, calculate_qv
 from .consensus import add_consensus_cli, get_consensus_calls
+from .config import add_config_cli, get_config
 
 # Configure logging format to match rs-nucflag
 # Set UTC
@@ -28,7 +31,7 @@ def main() -> int:
         description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    # ap.add_argument("-v", "--version", action="version", version=version("nucflag"))
+    ap.add_argument("-v", "--version", action="version", version=version("nucflag"))
 
     sub_ap = ap.add_subparsers(dest="cmd")
     add_call_cli(sub_ap)
@@ -37,6 +40,7 @@ def main() -> int:
     add_breakdown_cli(sub_ap)
     add_qv_cli(sub_ap)
     add_consensus_cli(sub_ap)
+    add_config_cli(sub_ap)
 
     args = ap.parse_args()
 
@@ -52,6 +56,8 @@ def main() -> int:
         return calculate_qv(args)
     elif args.cmd == "consensus":
         return get_consensus_calls(args)
+    elif args.cmd == "config":
+        return get_config(args)
     else:
         ap.print_help(sys.stderr)
         return 1

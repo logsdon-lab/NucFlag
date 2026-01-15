@@ -4,7 +4,7 @@ import argparse
 
 from typing import TYPE_CHECKING, Any
 
-from ..common import BED9_COLS, STATUSES
+from ..common import BED9_COLS, STATUSES, PRESETS
 
 if TYPE_CHECKING:
     SubArgumentParser = argparse._SubParsersAction[argparse.ArgumentParser]
@@ -96,7 +96,7 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         "-x",
         "--preset",
         default=None,
-        choices=["ont_r9", "ont_r10", "hifi"],
+        choices=PRESETS,
         help="Sequencing data specific preset.",
     )
     config_args.add_argument(
@@ -135,7 +135,7 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         "--overlap_calls",
         dest="overlap_calls",
         action="store_true",
-        help="Overlap NucFlag calls with coverage plot instead of adding as separate track. Similar to original NucFlag < v1.0. Correct regions are not displayed."
+        help="Overlap NucFlag calls with coverage plot instead of adding as separate track. Similar to original NucFlag < v1.0. Correct regions are not displayed.",
     )
     plot_args.add_argument(
         "--ylim",

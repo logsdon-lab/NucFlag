@@ -15,7 +15,7 @@ else:
 def add_qv_cli(parser: SubArgumentParser) -> None:
     ap = parser.add_parser(
         "qv",
-        description="Calculate QV from NucFlag misassemblies based on formula: -10 * math.log10(bp_err / bp_region)",
+        description="Calculate QV from NucFlag misassemblies based on formula: -10 * log10(bp_err / bp_region)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument(
@@ -37,6 +37,7 @@ def add_qv_cli(parser: SubArgumentParser) -> None:
         "--ignore-calls",
         help="Ignore specific calls in QV calculation.",
         nargs="*",
+        default=["scaffold"],
         type=str,
         choices=[s for s in STATUSES if s != "correct"],
     )
