@@ -243,6 +243,7 @@ def classify_plot_assembly(
             schema={"position": pl.UInt64, "first": pl.UInt32, "second": pl.UInt32},
         )
         del cov_first_second
+        aln.close()
     except ValueError:
         df = pl.read_csv(
             infile,
@@ -265,7 +266,7 @@ def classify_plot_assembly(
     del df
 
     if output_dir:
-        _ = plot_coverage(
+        fig, _ = plot_coverage(
             df_group_labeled, misassemblies, contig, overlay_regions, ylim
         )
 
@@ -273,6 +274,7 @@ def classify_plot_assembly(
 
         output_plot = os.path.join(output_dir, f"{contig_name}.png")
         plt.savefig(output_plot, dpi=PLOT_DPI, bbox_inches="tight")
+        plt.close(fig)
 
     if output_cov_dir:
         sys.stderr.write(f"Writing coverage files for {contig_name}.\n")
