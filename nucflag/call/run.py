@@ -126,7 +126,7 @@ def plot_misassemblies(
             tracks["Types"] = set(add_misassemblies_overlay_region(regions))
 
         logger.info(f"Plotting {ctg_coords}.")
-        _ = plot_coverage(
+        fig, _ = plot_coverage(
             itv=Interval(st, end, ctg),
             df_pileup=res.pileup,
             tracks=tracks,
@@ -137,6 +137,7 @@ def plot_misassemblies(
         output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.png")
         logger.info(f"Saving plot to {output_plot}.")
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
+        plt.close(fig)
 
     # Output coverage.
     if pileup_dir and add_pileup_data:
