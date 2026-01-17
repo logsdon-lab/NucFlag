@@ -17,6 +17,36 @@ from .region import Action, ActionOpt, Region
 logger = logging.getLogger(__name__)
 
 
+IDENT_BREAKPOINTS = [
+    85.0,
+    90.0,
+    95.0,
+    97.5,
+    98.0,
+    98.5,
+    98.75,
+    99.0,
+    99.25,
+    99.5,
+    99.75,
+    100.0,
+]
+IDENT_COLORS = [
+    "#4b3991",
+    "#2974af",
+    "#4a9da8",
+    "#57b894",
+    "#9dd893",
+    "#e1f686",
+    "#ffffb2",
+    "#fdda79",
+    "#fb9e4f",
+    "#ee5634",
+    "#c9273e",
+    "#8a0033",
+]
+
+
 def read_bed_file(
     bed_file: TextIO,
 ) -> Generator[tuple[str, int, int, list[str]], None, None]:
@@ -210,3 +240,16 @@ def write_output(
 
     df_status = generate_status_from_regions(df_region)
     df_status.write_csv(file=output_status, include_header=True, separator="\t")
+
+
+def read_identity_breakpoints(infile: TextIO | None) -> tuple[list[float], list[str]]:
+    if not infile:
+        return IDENT_BREAKPOINTS, IDENT_COLORS
+
+    idents, colors = [], []
+    for line in infile:
+        ident, hexcode_color = line.strip().split("\t")
+        idents.append(float(ident))
+        colors.append(hexcode_color)
+
+    return idents, colors

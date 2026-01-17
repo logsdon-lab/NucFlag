@@ -154,7 +154,6 @@ def plot_coverage(
         )
         ax = axs[0]
 
-    # TODO: Dedup at some point
     for typ, markercolor, color, label in (
         ("insertion", "#800080", "#800080", "Insertions"),
         ("deletion", "#f8f4ff", "#000000", "Deletions"),
@@ -175,7 +174,7 @@ def plot_coverage(
 
     for track_name, regions in ovl_tracks.items():
         for region in regions:
-            if region.name == "correct" and track_name == "Types":
+            if region.name == "correct" and track_name == "Calls":
                 continue
             if region.action:
                 color = region.action.desc
@@ -237,7 +236,12 @@ def plot_coverage(
         # Sort patches by label.
         # Special exception for MAPQ since it's a range and cannot sort lexographically. ex. 5-10 and 50-55
         if name == "MAPQ":
-            sp_filtered_patches.sort(key=lambda p: str(p.get_label()).split("-")[0])
+            sp_filtered_patches.sort(key=lambda p: int(p.get_label().split("-")[0]))
+        elif name == "Self-identity":
+            # 99.25%-99.50%
+            sp_filtered_patches.sort(
+                key=lambda p: float(p.get_label().split("-")[0][0:-1])
+            )
         else:
             sp_filtered_patches.sort(key=lambda p: str(p.get_label()))
 

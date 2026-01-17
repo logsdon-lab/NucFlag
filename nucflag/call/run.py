@@ -21,11 +21,12 @@ from .io import (
     write_output,
     write_bigwig,
     generate_status_from_regions,
+    read_identity_breakpoints,
     BED9_COLS,
 )
 from .region import (
     Region,
-    add_bin_overlay_region,
+    add_ident_overlay_region,
     add_mapq_overlay_region,
     add_misassemblies_overlay_region,
 )
@@ -55,6 +56,7 @@ def plot_misassemblies(
     ignore_mtypes: list[str],
     overlap_calls: bool,
     ylim: int | float,
+    ident_breakpoints: tuple[list[float], list[str]],
 ) -> pl.DataFrame:
     # Safer logging. Each itv should be unique so no hash collisions?
     random.seed(hash(itv))
@@ -106,24 +108,24 @@ def plot_misassemblies(
 
     # Plot contig.
     if plot_dir and isinstance(res.pileup, pl.DataFrame):
+        if "ident" in add_builtin_tracks:
+            logger.info(f"Adding local self-identity track for {ctg_coords}.")
+            tracks["Self-identity"] = set(
+                add_ident_overlay_region(
+                    ctg, res.pileup.select("pos", "bin", "bin_ident"), ident_breakpoints
+                )
+            )
+
         if "mapq" in add_builtin_tracks:
             logger.info(f"Adding mapq track for {ctg_coords}.")
             tracks["MAPQ"] = set(
                 add_mapq_overlay_region(ctg, res.pileup.select("pos", "mapq"))
             )
 
-        if "bin" in add_builtin_tracks:
-            logger.info(f"Adding bin track for {ctg_coords}.")
-            tracks["Structure"] = set(
-                add_bin_overlay_region(
-                    ctg, res.pileup.select("pos", "bin", "bin_ident")
-                )
-            )
-
         if overlap_calls:
-            ovl_tracks["Types"] = set(add_misassemblies_overlay_region(regions))
+            ovl_tracks["Calls"] = set(add_misassemblies_overlay_region(regions))
         else:
-            tracks["Types"] = set(add_misassemblies_overlay_region(regions))
+            tracks["Calls"] = set(add_misassemblies_overlay_region(regions))
 
         logger.info(f"Plotting {ctg_coords}.")
         fig, _ = plot_coverage(
@@ -208,6 +210,8 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         bed=args.input_regions.name if args.input_regions else None,
         window=window,
     )
+    # Load identity breakpoints
+    ident_breakpoints = read_identity_breakpoints(args.ident_breakpoints)
 
     # Ignore types.
     ignore_mtypes = []
@@ -244,6 +248,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
             ignore_mtypes,
             args.overlap_calls,
             args.ylim,
+            ident_breakpoints,
         ]
         for rgn in regions
     ]

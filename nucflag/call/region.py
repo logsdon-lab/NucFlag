@@ -3,6 +3,8 @@ from typing import Generator, NamedTuple
 
 import polars as pl
 import matplotlib.colors
+
+from bisect import bisect
 from intervaltree import Interval  # type: ignore[import-untyped]
 
 
@@ -107,9 +109,10 @@ def add_mapq_overlay_region(
         )
 
 
-def add_bin_overlay_region(
-    name: str, df: pl.DataFrame
+def add_ident_overlay_region(
+    name: str, df: pl.DataFrame, breakpoint_colors: tuple[list[float], list[str]]
 ) -> Generator[Region, None, None]:
+    breakpoints, colors = breakpoint_colors
     regions = (
         df.with_columns(bin_grp=pl.col("bin").rle_id())
         .group_by(["bin_grp"])
@@ -122,14 +125,26 @@ def add_bin_overlay_region(
     )
     for st, end, bin_ident in regions.iter_rows():
         if bin_ident == 0.0:
-            desc = "N/A"
-        else:
-            desc = f"{bin_ident:.2f}%"
+            continue
+        try:
+            idx_end = bisect(breakpoints, bin_ident)
+            ident_end = breakpoints[idx_end]
+            if idx_end == 0:
+                ident_st = 0.0
+            else:
+                ident_st = breakpoints[idx_end - 1]
+                color = colors[idx_end - 1]
+            desc = f"{ident_st}%-{ident_end}%"
+        except IndexError:
+            ident_end = breakpoints[-1]
+            color = colors[-1]
+            desc = str(ident_end)
+
         yield Region(
             name,
             Interval(st, end),
             desc=desc,
-            action=Action(ActionOpt.PLOT, None),
+            action=Action(ActionOpt.PLOT, color),
         )
 
 

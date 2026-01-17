@@ -128,8 +128,15 @@ def add_call_cli(parser: SubArgumentParser) -> None:
     plot_args.add_argument(
         "--add_builtin_tracks",
         nargs="*",
-        choices=["mapq", "bin"],
+        type=str,
+        choices=["mapq", "ident"],
         help="Add built-in tracks used in nucflag as overlay tracks.",
+    )
+    plot_args.add_argument(
+        "--ident_breakpoints",
+        type=argparse.FileType("rt"),
+        default=None,
+        help="Use TSV of breakpoint and hexcode color for identity track.",
     )
     plot_args.add_argument(
         "--overlap_calls",
