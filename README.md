@@ -1,6 +1,7 @@
 # `NucFlag`
 [![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
 [![PyPI - Version](https://img.shields.io/pypi/v/nucflag)](https://pypi.org/project/nucflag/)
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-blue.svg?style=flat)](http://bioconda.github.io/recipes/nucflag/README.html)
 
 Generates nucleotide frequency plots and genome misassembly BED files. Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq).
 
@@ -8,8 +9,12 @@ Generates nucleotide frequency plots and genome misassembly BED files. Fork of [
 
 ## Quickstart
 ```bash
-conda install nucflag # Or pip install nucflag
+pip install nucflag
+# Or conda install nucflag
 ```
+
+> [!NOTE]
+> NucFlag v1.0.0-alpha.1 is not installable via `bioconda` at the moment.
 
 Align long-reads to assembly.
 ```bash
@@ -67,6 +72,11 @@ nucflag ideogram -i misassemblies.bed -c cytobands.bed -o ideogram
 Get consensus misassembly calls by intersection.
 ```bash
 nucflag consensus -i nucflag_ont.bed nucflag_hifi.bed hmm_flagger_hifi.bed hmm_flagger_ont.bed > consensus.bed
+```
+
+Generate sample config.
+```bash
+nucflag config -x ont_r10 > config_r10.toml
 ```
 
 ## Input

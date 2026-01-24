@@ -18,7 +18,7 @@ def add_config_cli(parser: SubArgumentParser) -> None:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument(
-        "-p",
+        "-x",
         "--preset",
         type=str,
         default=None,
