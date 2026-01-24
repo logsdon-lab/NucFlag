@@ -10,5 +10,8 @@ build/
 exp/
 .snakemake
 *.egg-info
-.nucflag
-HG002
+Snakefile
+results/
+*.xml
+igv/
+example*/
