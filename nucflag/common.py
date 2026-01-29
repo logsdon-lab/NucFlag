@@ -1,7 +1,7 @@
 import polars as pl
 from matplotlib.axes import Axes
 
-BED9_COLS = [
+BED9P_COLS = [
     ("#chrom", pl.String),
     ("chromStart", pl.UInt64),
     ("chromEnd", pl.UInt64),
@@ -11,6 +11,8 @@ BED9_COLS = [
     ("thickStart", pl.UInt64),
     ("thickEnd", pl.UInt64),
     ("itemRgb", pl.String),
+    ("zscore", pl.Float32),
+    ("af", pl.Float32),
 ]
 
 STATUSES = (

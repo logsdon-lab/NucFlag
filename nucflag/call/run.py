@@ -22,7 +22,7 @@ from .io import (
     write_bigwig,
     generate_status_from_regions,
     read_identity_breakpoints,
-    BED9_COLS,
+    BED9P_COLS,
 )
 from .region import (
     Region,
@@ -210,6 +210,12 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         bed=args.input_regions.name if args.input_regions else None,
         window=window,
     )
+    if not regions:
+        logger.error(
+            f"No valid regions in {args.input_regions.name if args.input_regions else args.infile}."
+        )
+        return 1
+
     # Load identity breakpoints
     ident_breakpoints = read_identity_breakpoints(args.ident_breakpoints)
 
@@ -220,7 +226,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         logger.info(f"Ignoring {ignore_mtypes} from output bed and plots.")
 
     # Tracks to add that are builtin to nucflag.
-    # mapq/bins/...
+    # mapq/ident/...
     added_builtin_tracks = (
         set(args.add_builtin_tracks) if args.add_builtin_tracks else set()
     )
@@ -301,7 +307,8 @@ def create_status(args: argparse.Namespace) -> int:
         separator="\t",
         has_header=False,
         comment_prefix="#",
-        schema=dict(BED9_COLS),
+        columns=list(range(9)),
+        schema=dict(BED9P_COLS[0:9]),
     )
     if df_regions.is_empty():
         raise ValueError(f"No regions to generate status for {args.infile}")

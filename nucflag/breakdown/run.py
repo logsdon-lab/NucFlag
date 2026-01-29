@@ -10,7 +10,7 @@ from matplotlib.colors import rgb2hex
 from matplotlib.patches import Patch
 
 
-from ..common import BED9_COLS, STATUSES, minimalize_ax
+from ..common import BED9P_COLS, STATUSES, minimalize_ax
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,8 @@ def create_breakdown_plot(args: argparse.Namespace) -> int:
         separator="\t",
         has_header=False,
         comment_prefix="#",
-        schema=dict(BED9_COLS),
+        columns=list(range(9)),
+        schema=dict(BED9P_COLS[0:9]),
     ).with_columns(length=pl.col("chromEnd") - pl.col("chromStart"))
 
     df_fai = df_calls.group_by(["#chrom"]).agg(

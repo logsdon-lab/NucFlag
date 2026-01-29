@@ -3,7 +3,7 @@ import argparse
 
 import polars as pl
 
-from ..common import BED9_COLS, add_group_columns
+from ..common import BED9P_COLS, add_group_columns
 
 
 def calculate_qv(args: argparse.Namespace) -> int:
@@ -12,7 +12,8 @@ def calculate_qv(args: argparse.Namespace) -> int:
         separator="\t",
         has_header=False,
         comment_prefix="#",
-        schema=dict(BED9_COLS),
+        columns=list(range(9)),
+        schema=dict(BED9P_COLS[0:9]),
     )
 
     if args.ignore_calls:
