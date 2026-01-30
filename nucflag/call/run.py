@@ -85,7 +85,10 @@ def plot_misassemblies(
             res.regions.with_columns(
                 name=pl.when(pl.col("name").is_in(ignore_mtypes))
                 .then(pl.lit("correct"))
-                .otherwise(pl.col("name"))
+                .otherwise(pl.col("name")),
+                itemRgb=pl.when(pl.col("name").is_in(ignore_mtypes))
+                .then(pl.lit("206,206,206"))
+                .otherwise(pl.col("itemRgb")),
             )
             .with_columns(grp=pl.col("name").rle_id())
             .group_by(["grp"])
@@ -95,7 +98,7 @@ def plot_misassemblies(
                 pl.col("chromEnd").max(),
                 pl.col("name").first(),
                 # May change as result of filtering.
-                pl.col("score").median(),
+                pl.col("score").median().round().cast(pl.UInt64),
                 pl.col("strand").first(),
                 pl.col("thickStart").min(),
                 pl.col("thickEnd").max(),
