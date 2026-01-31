@@ -14,6 +14,7 @@ def calculate_qv(args: argparse.Namespace) -> int:
         comment_prefix="#",
         columns=list(range(9)),
         schema=dict(BED9P_COLS[0:9]),
+        truncate_ragged_lines=True,
     )
 
     if args.ignore_calls:

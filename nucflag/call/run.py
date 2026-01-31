@@ -312,6 +312,7 @@ def create_status(args: argparse.Namespace) -> int:
         comment_prefix="#",
         columns=list(range(9)),
         schema=dict(BED9P_COLS[0:9]),
+        truncate_ragged_lines=True,
     )
     if df_regions.is_empty():
         raise ValueError(f"No regions to generate status for {args.infile}")

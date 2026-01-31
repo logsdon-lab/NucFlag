@@ -223,6 +223,7 @@ def write_output(
                 separator="\t",
                 schema=dict(BED9P_COLS),
                 raise_if_empty=False,
+                truncate_ragged_lines=True,
             )
             # Erase file and then rewrite in sorted order.
             output_regions.seek(0)

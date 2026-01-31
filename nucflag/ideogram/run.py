@@ -96,6 +96,7 @@ def create_ideogram(args: argparse.Namespace) -> int:
         comment_prefix="#",
         columns=list(range(9)),
         schema=dict(BED9P_COLS[0:9]),
+        truncate_ragged_lines=True,
     ).with_columns(length=pl.col("chromEnd") - pl.col("chromStart"))
 
     df_fai = df_calls.group_by(["#chrom"]).agg(
