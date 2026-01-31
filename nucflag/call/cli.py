@@ -4,7 +4,7 @@ import argparse
 
 from typing import TYPE_CHECKING, Any
 
-from ..common import BED9_COLS, STATUSES, PRESETS
+from ..common import BED9P_COLS, STATUSES, PRESETS
 
 if TYPE_CHECKING:
     SubArgumentParser = argparse._SubParsersAction[argparse.ArgumentParser]
@@ -50,7 +50,7 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         "--output_regions",
         default=sys.stdout,
         type=argparse.FileType("wt"),
-        help=f"Output bed file with checked regions. With format: {[c[0] for c in BED9_COLS]}",
+        help=f"Output bed file with checked regions. With format: {[c[0] for c in BED9P_COLS]}",
     )
     output_args.add_argument(
         "-s",
@@ -73,7 +73,15 @@ def add_call_cli(parser: SubArgumentParser) -> None:
     output_args.add_argument(
         "--add_pileup_data",
         nargs="*",
-        choices=["cov", "mismatch", "mapq", "insertion", "deletion", "softclip"],
+        choices=[
+            "cov",
+            "mismatch",
+            "mapq",
+            "insertion",
+            "deletion",
+            "softclip",
+            "ident",
+        ],
         default=["cov", "mismatch"],
         help="Add these pileup data types as bigWigs to --output_pileup_dir.",
     )

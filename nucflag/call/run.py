@@ -22,7 +22,7 @@ from .io import (
     write_bigwig,
     generate_status_from_regions,
     read_identity_breakpoints,
-    BED9_COLS,
+    BED9P_COLS,
 )
 from .region import (
     Region,
@@ -30,13 +30,12 @@ from .region import (
     add_mapq_overlay_region,
     add_misassemblies_overlay_region,
 )
+from ..common import DEFAULT_WG_WINDOW, CORRECT_ITEM_RGB
 
 from py_nucflag import run_nucflag_itv, get_regions, get_config_from_preset  # type: ignore[import-untyped]
 
 # Get the logger
 logger = logging.getLogger(__name__)
-
-DEFAULT_WG_WINDOW = 10_000_000
 
 
 def plot_misassemblies(
@@ -58,7 +57,7 @@ def plot_misassemblies(
     ylim: int | float,
     ident_breakpoints: tuple[list[float], list[str]],
 ) -> pl.DataFrame:
-    # Safer logging. Each itv should be unique so no hash collisions?
+    # This is very broken. It's difficult to sync the logging across processes.
     random.seed(hash(itv))
     wait_time = random.random()
     time.sleep(wait_time)
@@ -85,7 +84,10 @@ def plot_misassemblies(
             res.regions.with_columns(
                 name=pl.when(pl.col("name").is_in(ignore_mtypes))
                 .then(pl.lit("correct"))
-                .otherwise(pl.col("name"))
+                .otherwise(pl.col("name")),
+                itemRgb=pl.when(pl.col("name").is_in(ignore_mtypes))
+                .then(pl.lit(CORRECT_ITEM_RGB))
+                .otherwise(pl.col("itemRgb")),
             )
             .with_columns(grp=pl.col("name").rle_id())
             .group_by(["grp"])
@@ -95,7 +97,7 @@ def plot_misassemblies(
                 pl.col("chromEnd").max(),
                 pl.col("name").first(),
                 # May change as result of filtering.
-                pl.col("score").median(),
+                pl.col("score").median().round().cast(pl.UInt64),
                 pl.col("strand").first(),
                 pl.col("thickStart").min(),
                 pl.col("thickEnd").max(),
@@ -210,6 +212,12 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         bed=args.input_regions.name if args.input_regions else None,
         window=window,
     )
+    if not regions:
+        logger.error(
+            f"No valid regions in {args.input_regions.name if args.input_regions else args.infile}."
+        )
+        return 1
+
     # Load identity breakpoints
     ident_breakpoints = read_identity_breakpoints(args.ident_breakpoints)
 
@@ -220,7 +228,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         logger.info(f"Ignoring {ignore_mtypes} from output bed and plots.")
 
     # Tracks to add that are builtin to nucflag.
-    # mapq/bins/...
+    # mapq/ident/...
     added_builtin_tracks = (
         set(args.add_builtin_tracks) if args.add_builtin_tracks else set()
     )
@@ -301,7 +309,9 @@ def create_status(args: argparse.Namespace) -> int:
         separator="\t",
         has_header=False,
         comment_prefix="#",
-        schema=dict(BED9_COLS),
+        columns=list(range(9)),
+        schema=dict(BED9P_COLS[0:9]),
+        truncate_ragged_lines=True,
     )
     if df_regions.is_empty():
         raise ValueError(f"No regions to generate status for {args.infile}")

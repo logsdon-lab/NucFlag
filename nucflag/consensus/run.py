@@ -12,7 +12,7 @@ from collections import defaultdict
 from intervaltree import Interval, IntervalTree
 
 from .constants import GOOD_REGIONS
-from ..common import BED9_COLS
+from ..common import BED9P_COLS
 
 
 def get_consensus_calls(args: argparse.Namespace) -> int:
@@ -32,8 +32,8 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
             separator="\t",
             has_header=False,
             comment_prefix="#",
-            columns=list(range(0, 4)),
-            schema=dict(BED9_COLS[0:4]),
+            columns=list(range(4)),
+            schema=dict(BED9P_COLS[0:4]),
             truncate_ragged_lines=True,
         )
         df_call = df_call.filter(~pl.col("name").is_in(ignore_calls))

@@ -8,7 +8,7 @@ ignore_boundaries = true
 [cov]
 n_zscores_high = 3.5
 n_zscores_low = 2.0
-ratio_collapse = 1.5
+ratio_collapse = 2.0
 ratio_false_dup = 0.5
 
 [mapq]
@@ -17,7 +17,7 @@ mapq_agg_fn = "Mean"
 
 [mismatch]
 n_zscores_high = 3.5
-ratio_het = 0.1
+ratio_het = 0.2
 
 [indel]
 n_zscores_high = 2.0

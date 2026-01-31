@@ -11,7 +11,7 @@ import polars as pl
 from matplotlib.colors import rgb2hex
 from intervaltree import Interval  # type: ignore[import-untyped]
 
-from ..common import BED9_COLS, STATUSES, add_group_columns
+from ..common import BED9P_COLS, STATUSES, add_group_columns
 from .region import Action, ActionOpt, Region
 
 logger = logging.getLogger(__name__)
@@ -127,12 +127,12 @@ def write_bigwig(
 
     if not os.path.exists(chrom_lengths):
         logging.warning(
-            f"Chromosome lengths are required to generate bigWig files for {chrom}. Generating wig files."
+            f"Chromosome lengths (-f) are required to generate bigWig files for {chrom}. Generating wig files."
         )
         for col in columns:
-            with gzip.open(
-                os.path.join(output_dir, f"{chrom_coords}_{col}.wig.gz"), "wb"
-            ) as fh:
+            outfile = os.path.join(output_dir, f"{chrom_coords}_{col}.wig.gz")
+            col = "bin_ident" if col == "ident" else col
+            with gzip.open(outfile, "wb") as fh:
                 df_values = (
                     df_pileup.select(col)
                     .cast({col: pl.Float64})
@@ -151,6 +151,7 @@ def write_bigwig(
         header = list(df_chrom_lengths.iter_rows())
         for col in columns:
             outfile = os.path.join(output_dir, f"{chrom_coords}_{col}.bw")
+            col = "bin_ident" if col == "ident" else col
             with pyBigWig.open(outfile, "w") as bw:
                 # https://github.com/deeptools/pyBigWig/issues/126
                 bw.addHeader(header)
@@ -212,7 +213,7 @@ def write_output(
             df_region = pl.concat(output_regions)
         except Exception:
             # No assembly errors.
-            df_region = pl.DataFrame(schema=BED9_COLS)
+            df_region = pl.DataFrame(schema=BED9P_COLS)
     elif isinstance(output_regions, io.TextIOBase):
         # Load out-of-order file.
         try:
@@ -220,8 +221,9 @@ def write_output(
                 output_regions.name,
                 has_header=False,
                 separator="\t",
-                schema=dict(BED9_COLS),
+                schema=dict(BED9P_COLS),
                 raise_if_empty=False,
+                truncate_ragged_lines=True,
             )
             # Erase file and then rewrite in sorted order.
             output_regions.seek(0)
@@ -230,7 +232,7 @@ def write_output(
                 file=output_regions, include_header=True, separator="\t"
             )
         except pl.exceptions.ShapeError:
-            df_region = pl.DataFrame(schema=BED9_COLS)
+            df_region = pl.DataFrame(schema=BED9P_COLS)
         except FileNotFoundError:
             return
     else:

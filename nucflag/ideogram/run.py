@@ -12,7 +12,7 @@ from matplotlib.colors import rgb2hex
 from matplotlib.patches import FancyBboxPatch, Patch
 from pyideogram.matplotlib_extension import SideRound
 
-from ..common import BED9_COLS, minimalize_ax
+from ..common import BED9P_COLS, minimalize_ax
 
 BAND_COLORS = pyid.BANDCOL | {"none": (1.0, 1.0, 1.0)}
 LBL_KWARGS = dict(rotation=0, ha="right", va="center")
@@ -94,7 +94,9 @@ def create_ideogram(args: argparse.Namespace) -> int:
         separator="\t",
         has_header=False,
         comment_prefix="#",
-        schema=dict(BED9_COLS),
+        columns=list(range(9)),
+        schema=dict(BED9P_COLS[0:9]),
+        truncate_ragged_lines=True,
     ).with_columns(length=pl.col("chromEnd") - pl.col("chromStart"))
 
     df_fai = df_calls.group_by(["#chrom"]).agg(

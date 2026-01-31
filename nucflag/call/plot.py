@@ -227,6 +227,7 @@ def plot_coverage(
         sp_patch_labels = set()
         sp_filtered_patches: list[ptch.Rectangle] = []
         for patch in sp_patches:
+            patch.set_edgecolor("black")
             patch_lbl = patch.get_label()
             if patch_lbl in sp_patch_labels:
                 continue
