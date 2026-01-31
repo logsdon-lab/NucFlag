@@ -32,6 +32,8 @@ STATUSES = (
     "scaffold",
 )
 PRESETS = ("ont_r9", "ont_r10", "hifi")
+DEFAULT_WG_WINDOW = 5_000_000
+CORRECT_ITEM_RGB = "206,206,206"
 
 
 def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:

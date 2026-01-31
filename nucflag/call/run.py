@@ -30,13 +30,12 @@ from .region import (
     add_mapq_overlay_region,
     add_misassemblies_overlay_region,
 )
+from ..common import DEFAULT_WG_WINDOW, CORRECT_ITEM_RGB
 
 from py_nucflag import run_nucflag_itv, get_regions, get_config_from_preset  # type: ignore[import-untyped]
 
 # Get the logger
 logger = logging.getLogger(__name__)
-
-DEFAULT_WG_WINDOW = 10_000_000
 
 
 def plot_misassemblies(
@@ -58,7 +57,7 @@ def plot_misassemblies(
     ylim: int | float,
     ident_breakpoints: tuple[list[float], list[str]],
 ) -> pl.DataFrame:
-    # This is very broken. It's dificult to since the logging across processes.
+    # This is very broken. It's difficult to sync the logging across processes.
     random.seed(hash(itv))
     wait_time = random.random()
     time.sleep(wait_time)
@@ -87,7 +86,7 @@ def plot_misassemblies(
                 .then(pl.lit("correct"))
                 .otherwise(pl.col("name")),
                 itemRgb=pl.when(pl.col("name").is_in(ignore_mtypes))
-                .then(pl.lit("206,206,206"))
+                .then(pl.lit(CORRECT_ITEM_RGB))
                 .otherwise(pl.col("itemRgb")),
             )
             .with_columns(grp=pl.col("name").rle_id())
