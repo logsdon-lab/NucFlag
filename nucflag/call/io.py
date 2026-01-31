@@ -127,12 +127,12 @@ def write_bigwig(
 
     if not os.path.exists(chrom_lengths):
         logging.warning(
-            f"Chromosome lengths are required to generate bigWig files for {chrom}. Generating wig files."
+            f"Chromosome lengths (-f) are required to generate bigWig files for {chrom}. Generating wig files."
         )
         for col in columns:
-            with gzip.open(
-                os.path.join(output_dir, f"{chrom_coords}_{col}.wig.gz"), "wb"
-            ) as fh:
+            outfile = os.path.join(output_dir, f"{chrom_coords}_{col}.wig.gz")
+            col = "bin_ident" if col == "ident" else col
+            with gzip.open(outfile, "wb") as fh:
                 df_values = (
                     df_pileup.select(col)
                     .cast({col: pl.Float64})

@@ -58,7 +58,7 @@ def plot_misassemblies(
     ylim: int | float,
     ident_breakpoints: tuple[list[float], list[str]],
 ) -> pl.DataFrame:
-    # Safer logging. Each itv should be unique so no hash collisions?
+    # This is very broken. It's dificult to since the logging across processes.
     random.seed(hash(itv))
     wait_time = random.random()
     time.sleep(wait_time)
