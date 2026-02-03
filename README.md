@@ -9,6 +9,7 @@ Generates nucleotide frequency plots and genome misassembly BED files. Fork of [
 
 ## Quickstart
 ```bash
+# Requires Python>=3.12
 pip install nucflag==1.0.0a2
 ```
 
