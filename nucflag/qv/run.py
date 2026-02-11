@@ -27,7 +27,16 @@ def calculate_qv(args: argparse.Namespace) -> int:
     # Group regions if not bookended.
     df_calls_grouped = add_group_columns(df_region=df_calls)
 
-    print("#chrom", "chromStart", "chromEnd", "QV", "bpError", "bpTotal", sep="\t")
+    print(
+        "#chrom",
+        "chromStart",
+        "chromEnd",
+        "QV",
+        "bpError",
+        "bpTotal",
+        sep="\t",
+        file=args.outfile,
+    )
     for grp, df_grp in df_calls_grouped.group_by(
         ["#chrom", "group"], maintain_order=True
     ):
@@ -52,10 +61,21 @@ def calculate_qv(args: argparse.Namespace) -> int:
             #
             # Both increase as numerator drops or denominator increases.
             qv = -10 * math.log10(bp_err / bp_region)
+        except ZeroDivisionError:
+            qv = 0.0
         except ValueError:
             # No errors in region.
             qv = math.inf
 
-        print(chrom, min_start, max_end, qv, bp_err, bp_region, sep="\t")
+        print(
+            chrom,
+            min_start,
+            max_end,
+            qv,
+            bp_err,
+            bp_region,
+            sep="\t",
+            file=args.outfile,
+        )
 
     return 0

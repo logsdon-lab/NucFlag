@@ -17,6 +17,7 @@ mapq_agg_fn = "Mean"
 
 [mismatch]
 n_zscores_high = 3.5
+ratio_low_quality = 0.5
 ratio_het = 0.2
 
 [indel]
