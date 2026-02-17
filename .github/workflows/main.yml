@@ -8,6 +8,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+
     steps:
     - name: Checkout directory.
       uses: actions/checkout@v3
@@ -15,7 +16,7 @@ jobs:
     - name: Set up Python.
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.version }}
+        python-version: ${{ matrix.python-version }}
 
     - name: Install dependencies.
       run: |
@@ -26,6 +27,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+
     steps:
     - name: Checkout directory.
       uses: actions/checkout@v3
@@ -35,7 +37,7 @@ jobs:
     - name: Set up Python.
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.version }}
+        python-version: ${{ matrix.python-version }}
 
     - name: Install dependencies.
       run: |
