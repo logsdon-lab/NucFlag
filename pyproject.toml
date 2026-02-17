@@ -17,12 +17,12 @@ exclude = ["docs*", "test*"]
 name = "nucflag"
 version = "1.0.0-alpha.3"
 authors = [
-    {name = "Keith Oshima", email = "oshimak@pennmedicine.upenn.edu"},
+    {name = "Keith Oshima", email = "koisland@pm.me"},
     {name = "Mitchell R. Vollger", email = "mrvollger@gmail.com"},
 ]
 description = "NucFlag misassembly identifier."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = {text = "MIT License"}
 dynamic = ["dependencies"]
 
