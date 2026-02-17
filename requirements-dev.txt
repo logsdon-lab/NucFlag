@@ -6,8 +6,6 @@ py-nucflag>=0.1.8
 pyBigWig>=0.3.24
 pyideogram>=0.1.0
 pre-commit
-imagehash
-pillow
 pytest
 ruff
 mypy
