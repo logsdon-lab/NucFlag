@@ -7,7 +7,7 @@ jobs:
   pypi:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout  directory.
+      - name: Checkout directory.
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
