@@ -1,4 +1,4 @@
-from enum import StrEnum, auto
+from enum import Enum, auto
 from typing import Generator, NamedTuple
 
 import polars as pl
@@ -8,7 +8,7 @@ from bisect import bisect
 from intervaltree import Interval  # type: ignore[import-untyped]
 
 
-class ActionOpt(StrEnum):
+class ActionOpt(Enum):
     IGNORE = auto()
     PLOT = auto()
     NOOP = auto()

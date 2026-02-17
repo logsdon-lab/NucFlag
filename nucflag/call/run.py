@@ -102,6 +102,8 @@ def plot_misassemblies(
                 pl.col("thickStart").min(),
                 pl.col("thickEnd").max(),
                 pl.col("itemRgb").first(),
+                pl.col("zscore").max(),
+                pl.col("af").max(),
             )
             .drop("grp")
         )
