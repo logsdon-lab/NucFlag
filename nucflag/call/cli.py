@@ -60,6 +60,11 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         help="Bed file with status of contigs and percentage breakdown of each misassembly type.",
     )
     output_args.add_argument(
+        "--status_by_region",
+        action="store_true",
+        help="Generate status regions by region. For whole-genome runs, these are the windows.",
+    )
+    output_args.add_argument(
         "-d",
         "--output_plot_dir",
         default=None,
@@ -148,7 +153,6 @@ def add_call_cli(parser: SubArgumentParser) -> None:
     )
     plot_args.add_argument(
         "--overlap_calls",
-        dest="overlap_calls",
         action="store_true",
         help="Overlap NucFlag calls with coverage plot instead of adding as separate track. Similar to original NucFlag < v1.0. Correct regions are not displayed.",
     )

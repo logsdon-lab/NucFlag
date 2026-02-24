@@ -1,4 +1,3 @@
-import io
 import os
 import gzip
 import logging
@@ -11,7 +10,7 @@ import polars as pl
 from matplotlib.colors import rgb2hex
 from intervaltree import Interval  # type: ignore[import-untyped]
 
-from ..common import BED9P_COLS, STATUSES, add_group_columns
+from ..common import STATUSES, add_group_columns
 from .region import Action, ActionOpt, Region
 
 logger = logging.getLogger(__name__)
@@ -204,43 +203,32 @@ def generate_status_from_regions(df_region: pl.DataFrame) -> pl.DataFrame:
 
 
 def write_output(
-    output_regions: TextIO | list[pl.DataFrame],
+    dfs_regions: list[pl.DataFrame],
+    output_regions: TextIO | None,
     output_status: TextIO | None,
+    *,
+    status_by_region: bool,
 ) -> None:
-    # If written to stdout, read saved inputs.
-    if isinstance(output_regions, list):
-        try:
-            df_region = pl.concat(output_regions)
-        except Exception:
-            # No assembly errors.
-            df_region = pl.DataFrame(schema=BED9P_COLS)
-    elif isinstance(output_regions, io.TextIOBase):
-        # Load out-of-order file.
-        try:
-            df_region = pl.read_csv(
-                output_regions.name,
-                has_header=False,
-                separator="\t",
-                schema=dict(BED9P_COLS),
-                raise_if_empty=False,
-                truncate_ragged_lines=True,
-            )
-            # Erase file and then rewrite in sorted order.
-            output_regions.seek(0)
-            output_regions.truncate(0)
-            df_region.unique().sort(by=["#chrom", "chromStart"]).write_csv(
-                file=output_regions, include_header=True, separator="\t"
-            )
-        except pl.exceptions.ShapeError:
-            df_region = pl.DataFrame(schema=BED9P_COLS)
-        except FileNotFoundError:
-            return
-    else:
-        raise ValueError(f"Invalid misasm output. {output_regions}")
     if not output_status:
         return
 
-    df_status = generate_status_from_regions(df_region)
+    df_region = pl.concat(dfs_regions)
+
+    if status_by_region:
+        df_status = pl.concat(
+            [generate_status_from_regions(df_region) for df_region in dfs_regions]
+        ).sort(by=["#chrom", "chromStart"])
+    else:
+        df_status = generate_status_from_regions(df_region)
+
+    if output_regions:
+        # Erase file and then rewrite in sorted order.
+        output_regions.seek(0)
+        output_regions.truncate(0)
+        df_region.unique().sort(by=["#chrom", "chromStart"]).write_csv(
+            file=output_regions, include_header=True, separator="\t"
+        )
+
     df_status.write_csv(file=output_status, include_header=True, separator="\t")
 
 
