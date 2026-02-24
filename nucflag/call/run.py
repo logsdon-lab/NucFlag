@@ -49,6 +49,7 @@ def plot_misassemblies(
     tracks: OrderedDict[str, set[Region]],
     ovl_tracks: OrderedDict[str, set[Region]],
     plot_dir: str | None,
+    plot_ext: str,
     pileup_dir: str | None,
     add_pileup_data: set[str],
     add_builtin_tracks: set[str],
@@ -140,7 +141,7 @@ def plot_misassemblies(
             plot_ylim=ylim,
         )
 
-        output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.png")
+        output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.{plot_ext}")
         logger.info(f"Saving plot to {output_plot}.")
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
         plt.close(fig)
@@ -196,17 +197,11 @@ def call_misassemblies(args: argparse.Namespace) -> int:
     else:
         ovl_tracks = defaultdict(OrderedDict)
 
-    if args.config:
-        with open(args.config, "rb") as fh:
-            cfg = tomllib.load(fh)
-        cfg_general: dict = cfg.get("general", {})
-        window = cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
-    else:
-        window = DEFAULT_WG_WINDOW
-
     # Print config to stderr.
     config_str = get_config_from_preset(args.preset, args.config)
     cfg = tomllib.loads(config_str)
+    _cfg_general: dict = cfg.get("general", {})
+    window = _cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
     logger.info(f"Using config:\n{pprint.pformat(cfg, underscore_numbers=True)}")
 
     regions: list[tuple[int, int, str]] = get_regions(
@@ -252,6 +247,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
             tracks.get(rgn[2], OrderedDict()),
             ovl_tracks.get(rgn[2], OrderedDict()),
             args.output_plot_dir,
+            args.plot_ext,
             args.output_pileup_dir,
             added_pileup_data,
             added_builtin_tracks,

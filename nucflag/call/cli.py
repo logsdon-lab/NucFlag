@@ -158,6 +158,12 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         type=ast.literal_eval,
         help="Plot y-axis limit. If float, used as a scaling factor from mean. (ex. 3.0 is mean times 3)",
     )
+    plot_args.add_argument(
+        "--plot_ext",
+        default="png",
+        choices=["svg", "pdf", "png"],
+        help="File extension of output plot. Vectorized formats are rasterized.",
+    )
     return None
 
 
