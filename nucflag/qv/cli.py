@@ -37,7 +37,7 @@ def add_qv_cli(parser: SubArgumentParser) -> None:
         "--ignore-calls",
         help="Ignore specific calls in QV calculation.",
         nargs="*",
-        default=["scaffold"],
+        default=["scaffold", "het_or_mismap"],
         type=str,
         choices=[s for s in STATUSES if s != "correct"],
     )
