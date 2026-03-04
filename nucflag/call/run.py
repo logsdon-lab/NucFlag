@@ -7,7 +7,6 @@ import logging
 import tomllib
 import tempfile
 import argparse
-from typing import TextIO
 from intervaltree import Interval  # type: ignore[import-untyped]
 from collections import OrderedDict, defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -22,7 +21,6 @@ from .io import (
     write_bigwig,
     generate_status_from_regions,
     read_identity_breakpoints,
-    BED9P_COLS,
 )
 from .region import (
     Region,
@@ -30,7 +28,7 @@ from .region import (
     add_mapq_overlay_region,
     add_misassemblies_overlay_region,
 )
-from ..common import DEFAULT_WG_WINDOW, CORRECT_ITEM_RGB
+from ..common import DEFAULT_WG_WINDOW, CORRECT_ITEM_RGB, BED9P_COLS
 
 from py_nucflag import run_nucflag_itv, get_regions, get_config_from_preset  # type: ignore[import-untyped]
 
@@ -49,6 +47,7 @@ def plot_misassemblies(
     tracks: OrderedDict[str, set[Region]],
     ovl_tracks: OrderedDict[str, set[Region]],
     plot_dir: str | None,
+    plot_ext: str,
     pileup_dir: str | None,
     add_pileup_data: set[str],
     add_builtin_tracks: set[str],
@@ -140,7 +139,7 @@ def plot_misassemblies(
             plot_ylim=ylim,
         )
 
-        output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.png")
+        output_plot = os.path.join(plot_dir, f"{ctg_coords_filesafe}.{plot_ext}")
         logger.info(f"Saving plot to {output_plot}.")
         plt.savefig(output_plot, dpi=600, bbox_inches="tight")
         plt.close(fig)
@@ -196,17 +195,11 @@ def call_misassemblies(args: argparse.Namespace) -> int:
     else:
         ovl_tracks = defaultdict(OrderedDict)
 
-    if args.config:
-        with open(args.config, "rb") as fh:
-            cfg = tomllib.load(fh)
-        cfg_general: dict = cfg.get("general", {})
-        window = cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
-    else:
-        window = DEFAULT_WG_WINDOW
-
     # Print config to stderr.
     config_str = get_config_from_preset(args.preset, args.config)
     cfg = tomllib.loads(config_str)
+    _cfg_general: dict = cfg.get("general", {})
+    window = _cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
     logger.info(f"Using config:\n{pprint.pformat(cfg, underscore_numbers=True)}")
 
     regions: list[tuple[int, int, str]] = get_regions(
@@ -239,7 +232,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
     logger.info(
         f"Generating outputs with {args.processes} processes with nucflag running with {args.threads} threads."
     )
-    save_res = args.output_regions.name == "<stdout>" and args.output_status
+    to_stdout = args.output_regions.name == "<stdout>"
     all_args = [
         [
             args.infile,
@@ -252,6 +245,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
             tracks.get(rgn[2], OrderedDict()),
             ovl_tracks.get(rgn[2], OrderedDict()),
             args.output_plot_dir,
+            args.plot_ext,
             args.output_pileup_dir,
             added_pileup_data,
             added_builtin_tracks,
@@ -284,22 +278,19 @@ def call_misassemblies(args: argparse.Namespace) -> int:
                 df_res.write_csv(
                     args.output_regions, include_header=False, separator="\t"
                 )
-                # But if writing to stdout, cannot retrieve later for status so save.
-                if save_res:
+                # Save to sort if not to stdout or to write status.
+                if not to_stdout or args.output_status:
                     dfs_regions.append(df_res)
-
-    if save_res:
-        output_regions: list[pl.DataFrame] | TextIO = dfs_regions
-    else:
-        output_regions = args.output_regions
 
     # Remove tempfile of ignored regions.
     tmpfile_ignore_bed.close()
 
     logger.info(f"Writing region BED file to {args.output_regions.name}.")
     write_output(
-        output_regions,
+        dfs_regions,
+        args.output_regions if not to_stdout else None,
         args.output_status,
+        status_by_region=args.status_by_region,
     )
     logger.info("Done!")
     return 0

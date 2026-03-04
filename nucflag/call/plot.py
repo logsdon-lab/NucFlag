@@ -170,6 +170,7 @@ def plot_coverage(
             markeredgewidth=0.2,
             markerfacecolor=markercolor,
             label=label,
+            rasterized=True,
         )
 
     for track_name, regions in ovl_tracks.items():
