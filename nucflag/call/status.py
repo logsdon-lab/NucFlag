@@ -1,15 +1,21 @@
+import logging
 import polars as pl
+import polars.selectors as cs
 
-from typing import Literal
+from typing import Literal, Collection, TextIO
 from collections import Counter, defaultdict
 from intervaltree import Interval, IntervalTree
 
+from ..qv.run import expr_qv
 from ..common import STATUSES, group_dataframe_by_contiguous_itvs
+
+
+logger = logging.getLogger(__name__)
 
 
 def group_dataframe_by_region(
     df_region: pl.DataFrame,
-    bed_group_by_regions: str,
+    bed_group_by_regions: TextIO,
     groupby: Literal["region", "name"],
 ) -> pl.DataFrame:
     df_bed_regions = pl.read_csv(
@@ -89,17 +95,19 @@ def group_dataframe_by_region(
 def generate_status_from_regions(
     df_region: pl.DataFrame,
     groupby: Literal["region", "name"],
-    bed_group_by_regions: str | None = None,
+    thr_qv: int,
+    ignore_calls_qv: Collection[str],
+    bed_group_by_regions: TextIO | None = None,
 ) -> pl.DataFrame:
     if bed_group_by_regions:
+        logger.info(f"Grouping regions by {bed_group_by_regions.name}.")
         df_region_grp = group_dataframe_by_region(
             df_region, bed_group_by_regions, groupby=groupby
         )
     else:
+        logger.info("Grouping contiguous regions.")
         # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
-        df_region_grp = group_dataframe_by_contiguous_itvs(df_region).with_columns(
-            group_length=pl.col("maxEnd") - pl.col("minStart")
-        )
+        df_region_grp = group_dataframe_by_contiguous_itvs(df_region)
 
     if groupby == "region":
         cols_agg = {
@@ -114,6 +122,7 @@ def generate_status_from_regions(
             pl.col("chromEnd"),
             pl.col("status"),
             *[pl.col(status) for status in STATUSES],
+            pl.col("QV"),
         ]
     else:
         cols_agg = {
@@ -126,7 +135,12 @@ def generate_status_from_regions(
             pl.col("group_length"),
             pl.col("status"),
             *[pl.col(status) for status in STATUSES],
+            pl.col("QV"),
         ]
+    error_statuses = set(STATUSES).difference((*ignore_calls_qv, "correct"))
+    logger.info(
+        f"Treating {error_statuses} as error statuses and regions with QV >= {thr_qv} as correct."
+    )
 
     df_final = (
         df_region_grp.group_by(["#chrom", "name", "group", "group_length"])
@@ -143,12 +157,16 @@ def generate_status_from_regions(
             **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
         )
         .with_columns(
-            status=pl.when(pl.col("correct") == 100.0)
+            bpError=pl.sum_horizontal(cs.contains(error_statuses)),
+            bpTotal=pl.sum_horizontal(cs.contains(*ignore_calls_qv, "correct")),
+        )
+        .with_columns(QV=expr_qv())
+        .with_columns(
+            status=pl.when(pl.col("QV") >= pl.lit(thr_qv))
             .then(pl.lit("correct"))
             .otherwise(pl.lit("misassembled")),
         )
         .select(cols_select)
-        .fill_null(0.0)
     )
     if groupby == "region":
         df_final = (

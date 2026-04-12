@@ -2,7 +2,7 @@ import os
 import gzip
 import logging
 from collections import OrderedDict, defaultdict
-from typing import DefaultDict, Generator, Iterable, TextIO
+from typing import DefaultDict, Generator, Iterable, TextIO, Collection
 
 import pyBigWig  # type: ignore
 import numpy as np
@@ -164,6 +164,8 @@ def write_output(
     output_status: TextIO | None,
     *,
     status_by_region: bool,
+    threshold_qv: int,
+    ignore_calls_qv: Collection[str],
 ) -> None:
     if not dfs_regions:
         return
@@ -184,12 +186,22 @@ def write_output(
     if status_by_region:
         df_status = pl.concat(
             [
-                generate_status_from_regions(df_region, groupby="region")
+                generate_status_from_regions(
+                    df_region,
+                    thr_qv=threshold_qv,
+                    ignore_calls_qv=ignore_calls_qv,
+                    groupby="region",
+                )
                 for df_region in dfs_regions
             ]
         ).sort(by=["#chrom", "chromStart"])
     else:
-        df_status = generate_status_from_regions(df_region, groupby="region")
+        df_status = generate_status_from_regions(
+            df_region,
+            thr_qv=threshold_qv,
+            ignore_calls_qv=ignore_calls_qv,
+            groupby="region",
+        )
 
     df_status.write_csv(file=output_status, include_header=True, separator="\t")
 

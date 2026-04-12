@@ -32,6 +32,7 @@ STATUSES = (
     "other_repeat",
     "scaffold",
 )
+NON_ERROR_STATUSES = ("scaffold", "het_or_mismap")
 PRESETS = ("ont_r9", "ont_r10", "hifi")
 DEFAULT_WG_WINDOW = 10_000_000
 CORRECT_ITEM_RGB = "206,206,206"
@@ -77,4 +78,5 @@ def group_dataframe_by_contiguous_itvs(df_region: pl.DataFrame) -> pl.DataFrame:
             minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
             maxEnd=pl.col("chromEnd").max().over(["#chrom", "group"]),
         )
+        .with_columns(group_length=pl.col("maxEnd") - pl.col("minStart"))
     )

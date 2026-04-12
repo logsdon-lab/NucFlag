@@ -291,6 +291,8 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         args.output_regions if not to_stdout else None,
         args.output_status,
         status_by_region=args.status_by_region,
+        threshold_qv=args.status_threshold_qv,
+        ignore_calls_qv=args.status_ignore_calls_qv,
     )
     logger.info("Done!")
     return 0
@@ -313,6 +315,8 @@ def create_status(args: argparse.Namespace) -> int:
         df_regions,
         bed_group_by_regions=args.bed_regions,
         groupby=args.groupby,
+        thr_qv=args.threshold_qv,
+        ignore_calls_qv=args.ignore_calls_qv,
     )
     df_status.write_csv(file=args.outfile, include_header=True, separator="\t")
     return 0
