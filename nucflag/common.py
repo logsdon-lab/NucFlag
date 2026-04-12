@@ -33,7 +33,7 @@ STATUSES = (
     "scaffold",
 )
 PRESETS = ("ont_r9", "ont_r10", "hifi")
-DEFAULT_WG_WINDOW = 5_000_000
+DEFAULT_WG_WINDOW = 10_000_000
 CORRECT_ITEM_RGB = "206,206,206"
 
 
@@ -54,7 +54,10 @@ def minimalize_ax(ax: Axes, *, remove_ticks: bool = False) -> None:
         )
 
 
-def add_group_columns(df_region: pl.DataFrame) -> pl.DataFrame:
+def group_dataframe_by_contiguous_itvs(df_region: pl.DataFrame) -> pl.DataFrame:
+    """
+    Group contiguous intervals. Any break creates a new group id.
+    """
     return (
         df_region.sort(by=["#chrom", "chromStart"])
         .with_columns(

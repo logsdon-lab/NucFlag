@@ -185,10 +185,23 @@ def add_status_cli(parser: SubArgumentParser) -> None:
         help="Input NucFlag misassembly calls as BED9.",
     )
     ap.add_argument(
+        "-b",
+        "--bed_regions",
+        type=argparse.FileType("rb"),
+        help="Regions as BED3 to summarize misassembly calls by.",
+    )
+    ap.add_argument(
+        "-g",
+        "--groupby",
+        default="region",
+        choices=["region", "name"],
+        help="Group by region (columns: chrom, st, end) or by name (columns: chrom, name). Only applicable if --bed_regions supplied.",
+    )
+    ap.add_argument(
         "-o",
         "--outfile",
         default=sys.stdout,
         type=argparse.FileType("wt"),
-        help="Bed file with status of contigs and percentage breakdown of each misassembly type.",
+        help="BED file with status of contigs and percentage breakdown of each misassembly type. If groupby is name, outputs TSV where the 2nd column is group and 3rd column is the group length.",
     )
     return None
