@@ -1,0 +1,5 @@
+#chrom	group	group_length	status	correct	insertion	deletion	softclip	low_quality	het_or_mismap	collapse	misjoin	mismatch	false_dup	homopolymer	dinucleotide	simple_repeat	other_repeat	scaffold
+HG002_chrY	100kbp	100000	misassembled	95.657	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	4.343	0.0	0.0
+HG002_chrY	200kbp	200000	misassembled	97.82849999999999	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	2.1715	0.0	0.0
+HG002_chrY	cen	2492004	correct	100.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+HG002_chrY	non_cen	59920243	misassembled	99.9721246123785	0.0	0.0	1.6688850877991267e-6	0.0	0.0	0.0	0.0	0.0	0.0	0.0003638169491402096	0.0	0.01322424543572028	0.0	0.0

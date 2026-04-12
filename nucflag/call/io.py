@@ -10,8 +10,8 @@ import polars as pl
 from matplotlib.colors import rgb2hex
 from intervaltree import Interval  # type: ignore[import-untyped]
 
-from ..common import STATUSES, add_group_columns
 from .region import Action, ActionOpt, Region
+from .status import generate_status_from_regions
 
 logger = logging.getLogger(__name__)
 
@@ -158,50 +158,6 @@ def write_bigwig(
                 bw.addEntries(chrom, start, values=values, span=1, step=1)
 
 
-def generate_status_from_regions(df_region: pl.DataFrame) -> pl.DataFrame:
-    # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
-    df_region_grp = add_group_columns(df_region)
-    return (
-        df_region_grp.group_by(["#chrom", "name", "group"])
-        .agg(
-            chromStart=pl.col("minStart").first(),
-            chromEnd=pl.col("maxEnd").first(),
-            perc=(
-                pl.col("length").sum()
-                / (pl.col("maxEnd").first() - pl.col("minStart").first())
-            )
-            * 100.0,
-        )
-        .pivot(
-            on="name",
-            index=["#chrom", "chromStart", "chromEnd"],
-            values="perc",
-            maintain_order=True,
-        )
-        # Ensure column exists.
-        # https://github.com/pola-rs/polars/issues/18372#issuecomment-2390371173
-        .with_columns(
-            **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
-        )
-        .with_columns(
-            status=pl.when(pl.col("correct") == 100.0)
-            .then(pl.lit("correct"))
-            .otherwise(pl.lit("misassembled")),
-        )
-        .select(
-            pl.col("#chrom"),
-            pl.col("chromStart"),
-            pl.col("chromEnd"),
-            pl.col("status"),
-            *[pl.col(status) for status in STATUSES],
-        )
-        .fill_null(0.0)
-        # chromStart and chromEnd get cast to float for some reason.
-        .cast({"chromStart": pl.Int64, "chromEnd": pl.Int64})
-        .sort(by=["#chrom", "chromStart"])
-    )
-
-
 def write_output(
     dfs_regions: list[pl.DataFrame],
     output_regions: TextIO | None,
@@ -209,17 +165,10 @@ def write_output(
     *,
     status_by_region: bool,
 ) -> None:
-    if not output_status:
+    if not dfs_regions:
         return
 
     df_region = pl.concat(dfs_regions)
-
-    if status_by_region:
-        df_status = pl.concat(
-            [generate_status_from_regions(df_region) for df_region in dfs_regions]
-        ).sort(by=["#chrom", "chromStart"])
-    else:
-        df_status = generate_status_from_regions(df_region)
 
     if output_regions:
         # Erase file and then rewrite in sorted order.
@@ -228,6 +177,19 @@ def write_output(
         df_region.unique().sort(by=["#chrom", "chromStart"]).write_csv(
             file=output_regions, include_header=True, separator="\t"
         )
+
+    if not output_status:
+        return
+
+    if status_by_region:
+        df_status = pl.concat(
+            [
+                generate_status_from_regions(df_region, groupby="region")
+                for df_region in dfs_regions
+            ]
+        ).sort(by=["#chrom", "chromStart"])
+    else:
+        df_status = generate_status_from_regions(df_region, groupby="region")
 
     df_status.write_csv(file=output_status, include_header=True, separator="\t")
 

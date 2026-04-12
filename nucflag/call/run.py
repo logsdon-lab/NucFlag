@@ -309,6 +309,10 @@ def create_status(args: argparse.Namespace) -> int:
     if df_regions.is_empty():
         raise ValueError(f"No regions to generate status for {args.infile}")
 
-    df_status = generate_status_from_regions(df_regions)
+    df_status = generate_status_from_regions(
+        df_regions,
+        bed_group_by_regions=args.bed_regions,
+        groupby=args.groupby,
+    )
     df_status.write_csv(file=args.outfile, include_header=True, separator="\t")
     return 0

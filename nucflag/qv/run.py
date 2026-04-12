@@ -3,7 +3,27 @@ import argparse
 
 import polars as pl
 
-from ..common import BED9P_COLS, add_group_columns
+from ..common import BED9P_COLS, group_dataframe_by_contiguous_itvs
+
+
+def qv(bp_err: int, bp_region: int) -> float:
+    try:
+        # Same as Inspector's QV metric.
+        # https://github.com/ChongLab/Inspector/blob/0e08f882181cc0e0e0fa749cd87fb74a278ea0f0/inspector.py#L184
+        # $ python -c "import math,sys; e,t = sys.argv[1:3]; print(-10 * math.log10(int(e) / int(t)))" 1 1670
+        #
+        # For merqury.
+        # $ echo "1 1670" | awk -v k=31 '{print (-10*log(1-(1-$1/$2)^(1/k))/log(10))}'
+        #
+        # Both increase as numerator drops or denominator increases.
+        qv = -10 * math.log10(bp_err / bp_region)
+    except ZeroDivisionError:
+        qv = 0.0
+    except ValueError:
+        # No errors in region.
+        qv = math.inf
+
+    return qv
 
 
 def calculate_qv(args: argparse.Namespace) -> int:
@@ -25,7 +45,7 @@ def calculate_qv(args: argparse.Namespace) -> int:
         )
 
     # Group regions if not bookended.
-    df_calls_grouped = add_group_columns(df_region=df_calls)
+    df_calls_grouped = group_dataframe_by_contiguous_itvs(df_region=df_calls)
 
     print(
         "#chrom",
@@ -51,27 +71,11 @@ def calculate_qv(args: argparse.Namespace) -> int:
             bp_err <= bp_region
         ), f"Length of error region ({bp_err}) exceeds length of region ({bp_region}) for {chrom}"
 
-        try:
-            # Same as Inspector's QV metric.
-            # https://github.com/ChongLab/Inspector/blob/0e08f882181cc0e0e0fa749cd87fb74a278ea0f0/inspector.py#L184
-            # $ python -c "import math,sys; e,t = sys.argv[1:3]; print(-10 * math.log10(int(e) / int(t)))" 1 1670
-            #
-            # For merqury.
-            # $ echo "1 1670" | awk -v k=31 '{print (-10*log(1-(1-$1/$2)^(1/k))/log(10))}'
-            #
-            # Both increase as numerator drops or denominator increases.
-            qv = -10 * math.log10(bp_err / bp_region)
-        except ZeroDivisionError:
-            qv = 0.0
-        except ValueError:
-            # No errors in region.
-            qv = math.inf
-
         print(
             chrom,
             min_start,
             max_end,
-            qv,
+            qv(bp_err=bp_err, bp_region=bp_region),
             bp_err,
             bp_region,
             sep="\t",
