@@ -3,11 +3,21 @@ import argparse
 
 import polars as pl
 
-from ..common import BED9P_COLS, group_dataframe_by_contiguous_itvs
+from typing import Collection
+
+from ..common import BED9P_COLS, NON_ERROR_STATUSES, group_dataframe_by_contiguous_itvs
 
 
-def qv(bp_err: int, bp_region: int) -> float:
-    try:
+def expr_qv() -> pl.Expr:
+    """
+    QV expression. Requires bpError and bpTotal column.
+    """
+    return (
+        pl.when(pl.col("bpError").eq(pl.lit(0)))
+        .then(pl.lit(math.inf))
+        # Null interval
+        .when(pl.col("bpTotal").eq(pl.lit(0)))
+        .then(pl.lit(0.0))
         # Same as Inspector's QV metric.
         # https://github.com/ChongLab/Inspector/blob/0e08f882181cc0e0e0fa749cd87fb74a278ea0f0/inspector.py#L184
         # $ python -c "import math,sys; e,t = sys.argv[1:3]; print(-10 * math.log10(int(e) / int(t)))" 1 1670
@@ -16,14 +26,29 @@ def qv(bp_err: int, bp_region: int) -> float:
         # $ echo "1 1670" | awk -v k=31 '{print (-10*log(1-(1-$1/$2)^(1/k))/log(10))}'
         #
         # Both increase as numerator drops or denominator increases.
-        qv = -10 * math.log10(bp_err / bp_region)
-    except ZeroDivisionError:
-        qv = 0.0
-    except ValueError:
-        # No errors in region.
-        qv = math.inf
+        .otherwise(-10 * (pl.col("bpError") / pl.col("bpTotal")).log10())
+    )
 
-    return qv
+
+def add_qv_to_df(
+    df: pl.DataFrame, ignore_calls: Collection[str] = NON_ERROR_STATUSES
+) -> pl.DataFrame:
+    return (
+        df.group_by(["#chrom", "group"], maintain_order=True)
+        .agg(
+            chromStart=pl.col("minStart").first(),
+            chromEnd=pl.col("maxEnd").first(),
+            bpTotal=pl.col("group_length").first(),
+            bpError=pl.when(
+                pl.col("name").ne(pl.lit("correct"))
+                & ~pl.col("name").is_in(ignore_calls)
+            )
+            .then(pl.col("length"))
+            .otherwise(pl.lit(0))
+            .sum(),
+        )
+        .with_columns(QV=expr_qv())
+    )
 
 
 def calculate_qv(args: argparse.Namespace) -> int:
@@ -37,49 +62,15 @@ def calculate_qv(args: argparse.Namespace) -> int:
         truncate_ragged_lines=True,
     )
 
-    if args.ignore_calls:
-        df_calls = df_calls.with_columns(
-            name=pl.when(pl.col("name").is_in(args.ignore_calls))
-            .then(pl.lit("correct"))
-            .otherwise(pl.col("name"))
-        )
-
     # Group regions if not bookended.
     df_calls_grouped = group_dataframe_by_contiguous_itvs(df_region=df_calls)
-
-    print(
-        "#chrom",
-        "chromStart",
-        "chromEnd",
-        "QV",
-        "bpError",
-        "bpTotal",
-        sep="\t",
-        file=args.outfile,
+    df_qv = add_qv_to_df(df_calls_grouped, ignore_calls=args.ignore_calls).select(
+        "#chrom", "chromStart", "chromEnd", "QV", "bpError", "bpTotal"
     )
-    for grp, df_grp in df_calls_grouped.group_by(
-        ["#chrom", "group"], maintain_order=True
-    ):
-        chrom = grp[0]
-        min_start = df_grp["minStart"][0]
-        max_end = df_grp["maxEnd"][0]
-
-        bp_region = max_end - min_start
-        bp_err = df_grp.filter(pl.col("name") != "correct")["length"].sum()
-
-        assert (
-            bp_err <= bp_region
-        ), f"Length of error region ({bp_err}) exceeds length of region ({bp_region}) for {chrom}"
-
-        print(
-            chrom,
-            min_start,
-            max_end,
-            qv(bp_err=bp_err, bp_region=bp_region),
-            bp_err,
-            bp_region,
-            sep="\t",
-            file=args.outfile,
-        )
+    df_qv.write_csv(
+        args.outfile,
+        separator="\t",
+        include_header=True,
+    )
 
     return 0

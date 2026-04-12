@@ -4,7 +4,7 @@ import argparse
 
 from typing import TYPE_CHECKING, Any
 
-from ..common import BED9P_COLS, STATUSES, PRESETS
+from ..common import BED9P_COLS, STATUSES, PRESETS, NON_ERROR_STATUSES
 
 if TYPE_CHECKING:
     SubArgumentParser = argparse._SubParsersAction[argparse.ArgumentParser]
@@ -58,6 +58,20 @@ def add_call_cli(parser: SubArgumentParser) -> None:
         default=None,
         type=argparse.FileType("wt"),
         help="Bed file with status of contigs and percentage breakdown of each misassembly type.",
+    )
+    output_args.add_argument(
+        "--status_threshold_qv",
+        default=20,
+        type=float,
+        help="Required QV of region or group to consider correct for status.",
+    )
+    output_args.add_argument(
+        "--status_ignore_calls_qv",
+        help="Ignore specific calls in status QV calculation.",
+        nargs="*",
+        default=list(NON_ERROR_STATUSES),
+        type=str,
+        choices=[s for s in STATUSES if s != "correct"],
     )
     output_args.add_argument(
         "--status_by_region",
@@ -196,6 +210,22 @@ def add_status_cli(parser: SubArgumentParser) -> None:
         default="region",
         choices=["region", "name"],
         help="Group by region (columns: chrom, st, end) or by name (columns: chrom, name). Only applicable if --bed_regions supplied.",
+    )
+    ap.add_argument(
+        "-t",
+        "--threshold_qv",
+        default=20,
+        type=float,
+        help="Required QV of region or group to consider correct.",
+    )
+    ap.add_argument(
+        "-c",
+        "--ignore_calls_qv",
+        help="Ignore specific calls in QV calculation.",
+        nargs="*",
+        default=list(NON_ERROR_STATUSES),
+        type=str,
+        choices=[s for s in STATUSES if s != "correct"],
     )
     ap.add_argument(
         "-o",

@@ -4,7 +4,7 @@ import argparse
 from typing import TYPE_CHECKING, Any
 
 
-from ..common import STATUSES
+from ..common import STATUSES, NON_ERROR_STATUSES
 
 if TYPE_CHECKING:
     SubArgumentParser = argparse._SubParsersAction[argparse.ArgumentParser]
@@ -34,10 +34,10 @@ def add_qv_cli(parser: SubArgumentParser) -> None:
     )
     ap.add_argument(
         "-c",
-        "--ignore-calls",
+        "--ignore_calls",
         help="Ignore specific calls in QV calculation.",
         nargs="*",
-        default=["scaffold", "het_or_mismap"],
+        default=list(NON_ERROR_STATUSES),
         type=str,
         choices=[s for s in STATUSES if s != "correct"],
     )
