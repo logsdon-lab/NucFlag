@@ -134,6 +134,7 @@ def test_call(expected, added_flags):
         INFILE_CFG,
         *added_flags,
     ]
+    # print(" ".join(cmd))
     run_integration_test(
         *cmd, expected_output=expected, overwrite_output=OVERWRITE_OUTPUT
     )

@@ -165,6 +165,9 @@ def write_output(
     *,
     status_by_region: bool,
 ) -> None:
+    if not dfs_regions:
+        return
+
     df_region = pl.concat(dfs_regions)
 
     if output_regions:
