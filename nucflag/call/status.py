@@ -39,10 +39,12 @@ def group_dataframe_by_region(
         ).with_columns(group_length=pl.col("length"))
 
     group_lengths: Counter[str | int] = Counter()
+    group_rows: Counter[str | int] = Counter()
     for i, row in enumerate(df_bed_regions.iter_rows(named=True)):
         group_id = row.get("name", i)
         group_length = row["chromEnd"] - row["chromStart"]
         group_lengths[group_id] += group_length
+        group_rows[group_id] += 1
         itrees[row["#chrom"]].add(
             Interval(row["chromStart"], row["chromEnd"], group_id)
         )
@@ -51,13 +53,9 @@ def group_dataframe_by_region(
     for row in df_region.iter_rows(named=True):
         itree_grp = itrees.get(row["#chrom"])
         if not itree_grp:
-            row["group"] = None
-            new_rows.append(row)
             continue
         ovl = itree_grp.overlap(row["chromStart"], row["chromEnd"])
         if not ovl:
-            row["group"] = None
-            new_rows.append(row)
             continue
 
         # Overlaps. Trim to boundaries of interval
@@ -73,7 +71,7 @@ def group_dataframe_by_region(
             new_rows.append(new_row)
 
     df_rows = (
-        pl.DataFrame(new_rows, orient="row")
+        pl.DataFrame(new_rows, orient="row", infer_schema_length=None)
         .with_columns(
             length=pl.col("chromEnd") - pl.col("chromStart"),
             minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
@@ -83,6 +81,15 @@ def group_dataframe_by_region(
             pl.DataFrame(
                 list(group_lengths.items()),
                 schema=["group", "group_length"],
+                orient="row",
+            ),
+            on="group",
+            how="left",
+        )
+        .join(
+            pl.DataFrame(
+                list(group_rows.items()),
+                schema=["group", "group_rows"],
                 orient="row",
             ),
             on="group",
@@ -110,6 +117,7 @@ def generate_status_from_regions(
         df_region_grp = group_dataframe_by_contiguous_itvs(df_region)
 
     if groupby == "region":
+        cols_groupby = ["#chrom", "name", "group", "group_length"]
         cols_agg = {
             "chromStart": pl.col("minStart").first(),
             "chromEnd": pl.col("maxEnd").first(),
@@ -125,14 +133,15 @@ def generate_status_from_regions(
             pl.col("QV"),
         ]
     else:
+        cols_groupby = ["name", "group", "group_length", "group_rows"]
         cols_agg = {
             "perc": (pl.col("length").sum() / pl.col("group_length").first()) * 100.0,
         }
-        cols_pivot_index = ["#chrom", "group", "group_length"]
+        cols_pivot_index = ["group", "group_length", "group_rows"]
         cols_select = [
-            pl.col("#chrom"),
             pl.col("group"),
             pl.col("group_length"),
+            pl.col("group_rows"),
             pl.col("status"),
             *[pl.col(status) for status in STATUSES],
             pl.col("QV"),
@@ -143,7 +152,7 @@ def generate_status_from_regions(
     )
 
     df_final = (
-        df_region_grp.group_by(["#chrom", "name", "group", "group_length"])
+        df_region_grp.group_by(cols_groupby)
         .agg(**cols_agg)
         .pivot(
             on="name",
