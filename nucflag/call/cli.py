@@ -209,10 +209,10 @@ def add_status_cli(parser: SubArgumentParser) -> None:
         "--groupby",
         default="region",
         choices=["region", "name"],
-        help="Group by region (columns: chrom, st, end) or by name (columns: chrom, name). Only applicable if --bed_regions supplied.",
+        help="Group by region (columns: chrom, st, end) or by name (columns: name). Only applicable if --bed_regions supplied.",
     )
     ap.add_argument(
-        "-t",
+        "-q",
         "--threshold_qv",
         default=20,
         type=float,
@@ -232,6 +232,6 @@ def add_status_cli(parser: SubArgumentParser) -> None:
         "--outfile",
         default=sys.stdout,
         type=argparse.FileType("wt"),
-        help="BED file with status of contigs and percentage breakdown of each misassembly type. If groupby is name, outputs TSV where the 2nd column is group and 3rd column is the group length.",
+        help="BED file with status of contigs and percentage breakdown of each misassembly type. If groupby is name, outputs TSV where the 1st column is group and 2nd column is the group length.",
     )
     return None
