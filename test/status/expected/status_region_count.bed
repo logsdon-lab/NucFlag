@@ -1,0 +1,6 @@
+#chrom	chromStart	chromEnd	correct	insertion	deletion	softclip	low_quality	het_or_mismap	collapse	misjoin	mismatch	false_dup	homopolymer	dinucleotide	simple_repeat	other_repeat	scaffold
+HG002_chrY	0	9389788	3.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	2.0	0.0	1.0	0.0	0.0
+HG002_chrY	9389788	10635790	2.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+HG002_chrY	10635790	11881792	1.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+HG002_chrY	11881792	37147020	15.0	0.0	0.0	1.0	0.0	0.0	0.0	0.0	0.0	0.0	8.0	0.0	1.0	0.0	0.0
+HG002_chrY	37147020	62412247	7.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	1.0	0.0	1.0	0.0	0.0

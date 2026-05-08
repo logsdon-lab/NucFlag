@@ -24,6 +24,12 @@ OVERWRITE_OUTPUT = False
             f"test/{COMMAND}/expected/status_region.bed{GZIP}",
             [],
         ),
+        (
+            "test/consensus/input/HG002_NucFlag_v1.0_ONT.bed.gz",
+            f"test/{COMMAND}/input/HG002_cen_region.bed",
+            f"test/{COMMAND}/expected/status_region_count.bed{GZIP}",
+            ["-m", "count"],
+        ),
     ],
 )
 def test_status(infile, bed, expected, added_flags):

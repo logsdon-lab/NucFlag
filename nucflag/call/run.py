@@ -314,6 +314,7 @@ def create_status(args: argparse.Namespace) -> int:
     df_status = generate_status_from_regions(
         df_regions,
         bed_group_by_regions=args.bed_regions,
+        metric=args.metric,
         groupby=args.groupby,
         thr_qv=args.threshold_qv,
         ignore_calls_qv=args.ignore_calls_qv,

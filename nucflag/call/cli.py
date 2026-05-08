@@ -212,6 +212,13 @@ def add_status_cli(parser: SubArgumentParser) -> None:
         help="Group by region (columns: chrom, st, end) or by name (columns: name). Only applicable if --bed_regions supplied.",
     )
     ap.add_argument(
+        "-m",
+        "--metric",
+        default="length",
+        choices=["count", "length"],
+        help="Generate status by length or count. If count, the QV and status columns are omitted.",
+    )
+    ap.add_argument(
         "-q",
         "--threshold_qv",
         default=20,

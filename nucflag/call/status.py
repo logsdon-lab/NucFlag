@@ -28,6 +28,11 @@ def group_dataframe_by_region(
 
     itrees: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
     if groupby == "name":
+        if "column_4" not in df_bed_regions.columns:
+            raise ValueError(
+                f"Missing name (4th) column in {bed_group_by_regions.name}"
+            )
+
         df_bed_regions = (
             df_bed_regions.rename({"column_4": "name"})
             .unique(subset=["#chrom", "chromStart", "chromEnd", "name"])
@@ -104,6 +109,7 @@ def generate_status_from_regions(
     groupby: Literal["region", "name"],
     thr_qv: int,
     ignore_calls_qv: Collection[str],
+    metric: Literal["count", "length"] = "length",
     bed_group_by_regions: TextIO | None = None,
 ) -> pl.DataFrame:
     if bed_group_by_regions:
@@ -116,48 +122,53 @@ def generate_status_from_regions(
         # Regions don't have coordinates so need to group by break in contiguity of adjacent intervals.
         df_region_grp = group_dataframe_by_contiguous_itvs(df_region)
 
+    if metric == "count":
+        logger.info("Tallying by count. QV and status columns will be omitted.")
+        expr_metric = pl.col("name").count()
+    else:
+        logger.info("Tallying by length.")
+        expr_metric = (pl.col("length").sum() / pl.col("group_length").first()) * 100.0
+
     if groupby == "region":
         cols_groupby = ["#chrom", "name", "group", "group_length"]
         cols_agg = {
             "chromStart": pl.col("minStart").first(),
             "chromEnd": pl.col("maxEnd").first(),
-            "perc": (pl.col("length").sum() / pl.col("group_length").first()) * 100.0,
+            "metric": expr_metric,
         }
         cols_pivot_index = ["#chrom", "chromStart", "chromEnd"]
-        cols_select = [
-            pl.col("#chrom"),
-            pl.col("chromStart"),
-            pl.col("chromEnd"),
-            pl.col("status"),
-            *[pl.col(status) for status in STATUSES],
-            pl.col("QV"),
-        ]
+        cols_select = {
+            "#chrom": pl.col("#chrom"),
+            "chromStart": pl.col("chromStart"),
+            "chromEnd": pl.col("chromEnd"),
+            "status": pl.col("status"),
+            **{status: pl.col(status) for status in STATUSES},
+            "QV": pl.col("QV"),
+        }
     else:
         cols_groupby = ["name", "group", "group_length", "group_rows"]
-        cols_agg = {
-            "perc": (pl.col("length").sum() / pl.col("group_length").first()) * 100.0,
-        }
+        cols_agg = {"metric": expr_metric}
         cols_pivot_index = ["group", "group_length", "group_rows"]
-        cols_select = [
-            pl.col("group"),
-            pl.col("group_length"),
-            pl.col("group_rows"),
-            pl.col("status"),
-            *[pl.col(status) for status in STATUSES],
-            pl.col("QV"),
-        ]
+        cols_select = {
+            "group": pl.col("group"),
+            "group_length": pl.col("group_length"),
+            "group_rows": pl.col("group_rows"),
+            "status": pl.col("status"),
+            **{status: pl.col(status) for status in STATUSES},
+            "QV": pl.col("QV"),
+        }
     error_statuses = set(STATUSES).difference((*ignore_calls_qv, "correct"))
-    logger.info(
-        f"Treating {error_statuses} as error statuses and regions with QV >= {thr_qv} as correct."
-    )
-
+    if metric != "count":
+        logger.info(
+            f"Treating {error_statuses} as error statuses and regions with QV >= {thr_qv} as correct."
+        )
     df_final = (
         df_region_grp.group_by(cols_groupby)
         .agg(**cols_agg)
         .pivot(
             on="name",
             index=cols_pivot_index,
-            values="perc",
+            values="metric",
             maintain_order=True,
         )
         # Ensure column exists.
@@ -165,18 +176,27 @@ def generate_status_from_regions(
         .with_columns(
             **{status: pl.coalesce(pl.col(f"^{status}$"), 0.0) for status in STATUSES},
         )
-        .with_columns(
-            bpError=pl.sum_horizontal(cs.contains(error_statuses)),
-            bpTotal=pl.sum_horizontal(cs.contains(*ignore_calls_qv, "correct")),
-        )
-        .with_columns(QV=expr_qv())
-        .with_columns(
-            status=pl.when(pl.col("QV") >= pl.lit(thr_qv))
-            .then(pl.lit("correct"))
-            .otherwise(pl.lit("misassembled")),
-        )
-        .select(cols_select)
     )
+
+    if metric == "length":
+        df_final = (
+            df_final.with_columns(
+                bpError=pl.sum_horizontal(cs.contains(error_statuses)),
+                bpTotal=pl.sum_horizontal(cs.contains(*ignore_calls_qv, "correct")),
+            )
+            .with_columns(QV=expr_qv())
+            .with_columns(
+                status=pl.when(pl.col("QV") >= pl.lit(thr_qv))
+                .then(pl.lit("correct"))
+                .otherwise(pl.lit("misassembled")),
+            )
+            .select(cols_select.values())
+        )
+    else:
+        cols_select.pop("QV")
+        cols_select.pop("status")
+        df_final = df_final.select(cols_select.values())
+
     if groupby == "region":
         df_final = (
             df_final
