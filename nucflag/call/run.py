@@ -170,10 +170,9 @@ def call_misassemblies(args: argparse.Namespace) -> int:
     ignore_bed = None
     tmpfile_ignore_bed = tempfile.NamedTemporaryFile("wt")
     if args.ignore_regions:
-        logger.info(f"Ignoring region(s) from {args.ignore_regions}.")
-        with open(args.ignore_regions, "rt") as fh:
-            for line in fh:
-                tmpfile_ignore_bed.write(line)
+        logger.info(f"Ignoring region(s) from {args.ignore_regions.name}.")
+        for line in args.ignore_regions:
+            tmpfile_ignore_bed.write(line)
         ignore_bed = tmpfile_ignore_bed
 
     # Load additional regions to overlay and ignore.
