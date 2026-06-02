@@ -10,11 +10,8 @@ Generates nucleotide frequency plots and genome misassembly BED files. Fork of [
 ## Quickstart
 ```bash
 # Requires Python>=3.11
-pip install nucflag==1.0.0a5
+pip install nucflag==1.0.0
 ```
-
-> [!NOTE]
-> NucFlag v1.0.0-alpha.5 is not installable via `bioconda` at the moment.
 
 Align long-reads to assembly.
 ```bash
