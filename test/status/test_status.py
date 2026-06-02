@@ -30,6 +30,12 @@ OVERWRITE_OUTPUT = False
             f"test/{COMMAND}/expected/status_region_count.bed{GZIP}",
             ["-m", "count"],
         ),
+        (
+            f"test/{COMMAND}/input/CHM13_chr4_calls.bed.gz",
+            f"test/{COMMAND}/input/CHM13_chr4_alr_ovl.bed",
+            f"test/{COMMAND}/expected/status_ovl_regions.bed{GZIP}",
+            [],
+        ),
     ],
 )
 def test_status(infile, bed, expected, added_flags):

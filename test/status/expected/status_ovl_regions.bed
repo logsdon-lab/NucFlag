@@ -1,0 +1,4 @@
+#chrom	chromStart	chromEnd	status	correct	insertion	deletion	softclip	low_quality	het_or_mismap	collapse	misjoin	mismatch	false_dup	homopolymer	dinucleotide	simple_repeat	other_repeat	scaffold	QV
+CHM13_chr14	5399447	6941101	correct	100.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	inf
+CHM13_chr14	6939252	8730805	correct	99.99994418250535	0.0	0.0	0.0	0.000055817494654079454	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	62.53229418131666
+CHM13_chr14	8383973	13283271	correct	99.87986033917512	0.0	0.0	0.0	0.00004082217493200046	0.12009883864994536	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	63.89103683286784

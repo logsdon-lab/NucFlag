@@ -2,7 +2,7 @@ import logging
 import polars as pl
 import polars.selectors as cs
 
-from typing import Literal, Collection, TextIO
+from typing import Any, Literal, Collection, TextIO
 from collections import Counter, defaultdict
 from intervaltree import Interval, IntervalTree
 
@@ -54,7 +54,9 @@ def group_dataframe_by_region(
             Interval(row["chromStart"], row["chromEnd"], group_id)
         )
 
-    new_rows = []
+    new_rows_by_chrom_group: defaultdict[
+        tuple[str, int], list[dict[str, Any]]
+    ] = defaultdict(list)
     for row in df_region.iter_rows(named=True):
         itree_grp = itrees.get(row["#chrom"])
         if not itree_grp:
@@ -73,7 +75,23 @@ def group_dataframe_by_region(
             new_row["thickStart"] = st
             new_row["thickEnd"] = end
             new_row["group"] = ovl_itv.data
-            new_rows.append(new_row)
+            new_rows_by_chrom_group[(row["#chrom"], ovl_itv.data)].append(new_row)
+
+    # Merge overlaps.
+    # In case where input regions have overlap, merge rows based on group/name/overlap
+    new_rows = []
+    for _, itvs in new_rows_by_chrom_group.items():
+        itvs_sorted = sorted(itvs, key=lambda x: x["chromStart"])
+        itvs_merged = [itvs_sorted[0]]
+        for itv in itvs_sorted[1:]:
+            prev_itv = itvs_merged[-1]
+            dst = itv["chromStart"] - prev_itv["chromEnd"]
+            # Overlaps (Not book-ended) and same name
+            if dst < 0 and prev_itv["name"] == itv["name"]:
+                prev_itv["chromEnd"] = itv["chromEnd"]
+            else:
+                itvs_merged.append(itv)
+        new_rows.extend(itvs_merged)
 
     df_rows = (
         pl.DataFrame(new_rows, orient="row", infer_schema_length=None)
