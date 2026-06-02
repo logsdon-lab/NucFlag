@@ -170,11 +170,11 @@ def call_misassemblies(args: argparse.Namespace) -> int:
     ignore_bed = None
     tmpfile_ignore_bed = tempfile.NamedTemporaryFile("wt")
     if args.ignore_regions:
-        logger.info(f"Ignoring region(s) from {args.ignore_regions}.")
-        with open(args.ignore_regions, "rt") as fh:
-            for line in fh:
-                tmpfile_ignore_bed.write(line)
+        logger.info(f"Ignoring region(s) from {args.ignore_regions.name}.")
+        for line in args.ignore_regions:
+            tmpfile_ignore_bed.write(line)
         ignore_bed = tmpfile_ignore_bed
+        ignore_bed.flush()
 
     # Load additional regions to overlay and ignore.
     if args.tracks:
@@ -314,6 +314,7 @@ def create_status(args: argparse.Namespace) -> int:
     df_status = generate_status_from_regions(
         df_regions,
         bed_group_by_regions=args.bed_regions,
+        metric=args.metric,
         groupby=args.groupby,
         thr_qv=args.threshold_qv,
         ignore_calls_qv=args.ignore_calls_qv,
