@@ -174,6 +174,7 @@ def call_misassemblies(args: argparse.Namespace) -> int:
         for line in args.ignore_regions:
             tmpfile_ignore_bed.write(line)
         ignore_bed = tmpfile_ignore_bed
+        ignore_bed.flush()
 
     # Load additional regions to overlay and ignore.
     if args.tracks:
