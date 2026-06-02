@@ -193,7 +193,6 @@ def plot_coverage(
                 region_st,
                 region_end,
                 color=color,
-                alpha=0.4,
                 label=region.desc,
             )
 
