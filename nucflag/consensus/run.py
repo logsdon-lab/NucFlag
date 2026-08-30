@@ -75,7 +75,7 @@ def get_consensus_calls(args: argparse.Namespace) -> int:
         fn_ovl_check = None
 
     # https://stackoverflow.com/a/43009963
-    cmap = plt.cm.get_cmap("rainbow")
+    cmap = plt.get_cmap("rainbow")
     if args.perc_ovl:
         norm = matplotlib.colors.Normalize(vmin=0, vmax=100)
     else:

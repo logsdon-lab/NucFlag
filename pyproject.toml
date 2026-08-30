@@ -5,10 +5,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 include-package-data = true
 
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
-
 [tool.setuptools.packages.find]
 include = ["nucflag*"]
 exclude = ["docs*", "test*"]
@@ -24,10 +20,33 @@ description = "NucFlag misassembly identifier."
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT License"}
-dynamic = ["dependencies"]
+dependencies = ["matplotlib>=3.8.3,<4", "numpy>=1.26.4,<2", "polars>=1.6.0,<2", "intervaltree>=3.2.1,<4", "py-nucflag>=0.1.12,<0.2", "pybigwig>=0.3.25,<0.4", "pyideogram>=0.1.1,<0.2"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy", "pre-commit", "twine", "build"]
 
 [project.urls]
 Homepage = "https://github.com/logsdon-lab/NucFlag"
 
 [project.scripts]
 nucflag = "nucflag.main:main"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "win-64", "osx-64"]
+
+[tool.pixi.pypi-dependencies]
+nucflag = { path = ".", editable = true }
+pip = "*"
+pytest = "*"
+ruff = "*"
+mypy = "*"
+pre-commit = "*"
+twine = "*"
+build = "*"
+
+[tool.pixi.tasks]
+test = "python -m pytest -vv"
+build = "python -m build"
+clean = "rm -rf dist/ venv/ .*cache/ *.egg-info/ benchmarks/ logs/ output/ .snakemake/"
+upload = "python -m twine upload --repository pypi dist/*"

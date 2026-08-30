@@ -26,7 +26,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def main() -> int:
+# TODO: Change CLI testing to pass to nucflag.main([])
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Use per-base read coverage to classify/plot misassemblies.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -42,7 +43,7 @@ def main() -> int:
     add_consensus_cli(sub_ap)
     add_config_cli(sub_ap)
 
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     if args.cmd == "call":
         return call_misassemblies(args)
