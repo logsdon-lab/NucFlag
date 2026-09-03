@@ -16,3 +16,6 @@ results/
 igv/
 example*/
 .vscode
+# pixi environments
+.pixi/*
+!.pixi/config.toml

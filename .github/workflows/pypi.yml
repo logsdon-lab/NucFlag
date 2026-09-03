@@ -18,8 +18,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies.
-        run: |
-          make venv && make build
+        run: pip install ".[dev]"
 
       - name: Publish package.
         uses: pypa/gh-action-pypi-publish@release/v1
