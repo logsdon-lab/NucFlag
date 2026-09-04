@@ -124,13 +124,25 @@ def group_dataframe_by_region(
 
 def generate_status_from_regions(
     df_region: pl.DataFrame,
-    groupby: Literal["region", "name"],
+    groupby: Literal["region", "name", "all"],
     thr_qv: int,
     ignore_calls_qv: Collection[str],
-    metric: Literal["count", "length"] = "length",
+    metric: Literal[
+        "count",
+        "length",
+    ] = "length",
     bed_group_by_regions: TextIO | None = None,
 ) -> pl.DataFrame:
-    if bed_group_by_regions:
+    if groupby == "all":
+        # Group rows and get length of contigs
+        # Overwrite groups to merge everything
+        df_region_grp = group_dataframe_by_contiguous_itvs(df_region)
+        df_region_grp = df_region_grp.with_columns(
+            group=pl.lit("all"),
+            group_length=pl.col("group_length").unique().sum(),
+            group_rows=pl.col("#chrom").count(),
+        )
+    elif bed_group_by_regions:
         logger.info(f"Grouping regions by {bed_group_by_regions.name}.")
         df_region_grp = group_dataframe_by_region(
             df_region, bed_group_by_regions, groupby=groupby
@@ -199,7 +211,8 @@ def generate_status_from_regions(
     if metric == "length":
         df_final = (
             df_final.with_columns(
-                bpError=pl.sum_horizontal(cs.contains(error_statuses)),
+                # We're adding percents here but doesn't matter since proportion used for QV
+                bpError=pl.sum_horizontal(cs.contains(error_statuses)),  # pyright:ignore
                 bpTotal=pl.sum_horizontal(cs.contains(*ignore_calls_qv, "correct")),
             )
             .with_columns(QV=expr_qv())

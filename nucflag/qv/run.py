@@ -5,7 +5,12 @@ import polars as pl
 
 from typing import Collection
 
-from ..common import BED9P_COLS, NON_ERROR_STATUSES, group_dataframe_by_contiguous_itvs
+from ..common import (
+    STATUSES,
+    BED9P_COLS,
+    NON_ERROR_STATUSES,
+    group_dataframe_by_contiguous_itvs,
+)
 
 
 def expr_qv() -> pl.Expr:
@@ -33,16 +38,17 @@ def expr_qv() -> pl.Expr:
 def add_qv_to_df(
     df: pl.DataFrame, ignore_calls: Collection[str] = NON_ERROR_STATUSES
 ) -> pl.DataFrame:
+    error_statuses = set(STATUSES).difference((*ignore_calls, "correct"))
     return (
         df.group_by(["#chrom", "group"], maintain_order=True)
         .agg(
             chromStart=pl.col("minStart").first(),
             chromEnd=pl.col("maxEnd").first(),
-            bpTotal=pl.col("group_length").first(),
-            bpError=pl.when(
-                pl.col("name").ne(pl.lit("correct"))
-                & ~pl.col("name").is_in(ignore_calls)
-            )
+            bpTotal=pl.when(pl.col("name").is_in([*ignore_calls, "correct"]))
+            .then(pl.col("length"))
+            .otherwise(pl.lit(0))
+            .sum(),
+            bpError=pl.when(pl.col("name").is_in(error_statuses))
             .then(pl.col("length"))
             .otherwise(pl.lit(0))
             .sum(),
@@ -64,9 +70,22 @@ def calculate_qv(args: argparse.Namespace) -> int:
 
     # Group regions if not bookended.
     df_calls_grouped = group_dataframe_by_contiguous_itvs(df_region=df_calls)
-    df_qv = add_qv_to_df(df_calls_grouped, ignore_calls=args.ignore_calls).select(
+    # Also do all.
+    df_calls_all = df_calls_grouped.with_columns(
+        group=pl.lit(0),
+        minStart=pl.lit(0).cast(pl.UInt64),
+        maxEnd=pl.lit(0).cast(pl.UInt64),
+        group_length=pl.col("group_length").unique().sum(),
+        group_rows=pl.col("#chrom").count(),
+        **{"#chrom": pl.lit("all")},
+    )
+    df_qv_grouped = add_qv_to_df(
+        df_calls_grouped, ignore_calls=args.ignore_calls
+    ).select("#chrom", "chromStart", "chromEnd", "QV", "bpError", "bpTotal")
+    df_qv_all = add_qv_to_df(df_calls_all, ignore_calls=args.ignore_calls).select(
         "#chrom", "chromStart", "chromEnd", "QV", "bpError", "bpTotal"
     )
+    df_qv = pl.concat([df_qv_all, df_qv_grouped])
     df_qv.write_csv(
         args.outfile,
         separator="\t",

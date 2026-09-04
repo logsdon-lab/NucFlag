@@ -46,6 +46,7 @@ twine = "*"
 build = "*"
 
 [tool.pixi.tasks]
+fmt = "ruff format ."
 test = "python -m pytest -vv"
 build = "python -m build"
 clean = "rm -rf dist/ venv/ .*cache/ *.egg-info/ benchmarks/ logs/ output/ .snakemake/"
