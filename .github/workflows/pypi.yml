@@ -9,16 +9,16 @@ jobs:
     steps:
       - name: Checkout directory.
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Set up Python.
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Install dependencies.
-        run: pip install ".[dev]"
+      - name: Build package.
+        run: |
+          python3 -m pip install ".[dev]"
+          python3 -m build
 
       - name: Publish package.
         uses: pypa/gh-action-pypi-publish@release/v1

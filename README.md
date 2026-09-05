@@ -1,7 +1,7 @@
 # `NucFlag`
 [![CI](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml/badge.svg)](https://github.com/logsdon-lab/NucFlag/actions/workflows/main.yml)
 [![PyPI - Version](https://img.shields.io/pypi/v/nucflag)](https://pypi.org/project/nucflag/)
-[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-blue.svg?style=flat)](http://bioconda.github.io/recipes/nucflag/README.html)
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-orange.svg?style=flat)](http://bioconda.github.io/recipes/nucflag/README.html)
 
 Generates nucleotide frequency plots and genome misassembly BED files. Fork of [`NucFreq`](https://github.com/mrvollger/NucFreq).
 
@@ -10,7 +10,7 @@ Generates nucleotide frequency plots and genome misassembly BED files. Fork of [
 ## Quickstart
 ```bash
 # Requires Python>=3.11
-pip install nucflag==1.0.0
+pip install nucflag>=1.0.0
 ```
 
 Align long-reads to assembly.
