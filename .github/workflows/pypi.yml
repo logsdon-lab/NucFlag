@@ -17,8 +17,10 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies.
-        run: pip install ".[dev]"
+      - name: Build package.
+        run: |
+          python3 -m pip install ".[dev]"
+          python3 -m build
 
       - name: Publish package.
         uses: pypa/gh-action-pypi-publish@release/v1
