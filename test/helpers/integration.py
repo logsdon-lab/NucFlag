@@ -1,13 +1,13 @@
 import sys
-import gzip
 import subprocess
 import itertools
 import tempfile
+import polars as pl
 from typing import Iterable
+from polars.testing import assert_frame_equal
 
-Output_Lines = list[str]
-Outputs = Output_Lines | str
-Outputs_To_Check = list[tuple[Outputs, str]]
+
+Outputs_To_Check = list[tuple[pl.DataFrame | str, str]]
 
 
 def check_output(outputs: Outputs_To_Check, overwrite_output: bool) -> None:
@@ -15,31 +15,17 @@ def check_output(outputs: Outputs_To_Check, overwrite_output: bool) -> None:
     Check that outputs match expected output line-by-line.
     """
     for in_output, exp_output in outputs:
-        if isinstance(in_output, list):
-            sorted_in_res = sorted(in_output)
+        if isinstance(in_output, pl.DataFrame):
+            df_in_res = in_output
         else:
-            with open(in_output, "rt") as fh:
-                sorted_in_res = sorted(line.strip() for line in fh.readlines())
+            df_in_res = pl.read_csv(in_output, separator="\t")
 
         if overwrite_output:
-            is_gzip_file = exp_output.endswith(".gz")
-            with gzip.open(exp_output, "wb") if is_gzip_file else open(
-                exp_output, "wt"
-            ) as fh:
-                for line in sorted_in_res:
-                    fh.write(f"{line}\n".encode() if is_gzip_file else f"{line}\n")
+            df_in_res.write_csv(exp_output)
             continue
 
-        with gzip.open(exp_output, "rt") if exp_output.endswith(".gz") else open(
-            exp_output, "rt"
-        ) as exp_res_fh:
-            sorted_exp_res = sorted(
-                line.strip() for line in exp_res_fh.readlines() if line
-            )
-            for i, (res, exp) in enumerate(
-                zip(sorted_in_res, sorted_exp_res, strict=True)
-            ):
-                assert res == exp, f"Not equal ({res} != {exp}) on line {i}"
+        df_exp_res = pl.read_csv(exp_output, separator="\t")
+        assert_frame_equal(df_in_res, df_exp_res, check_row_order=False)
 
 
 def run_integration_test(
@@ -66,9 +52,7 @@ def run_integration_test(
             capture_output=True,
             check=True,
         )
-        res = sorted(
-            line.strip() for line in process.stdout.decode().split("\n") if line
-        )
+        res = pl.read_csv(process.stdout, separator="\t")
         outputs: Outputs_To_Check = [(res, expected_output)]
         check_output(outputs, overwrite_output)
     else:

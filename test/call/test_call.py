@@ -1,6 +1,7 @@
 import os
 import pytest
 
+import nucflag.main
 from ..helpers.integration import run_integration_test
 
 
@@ -138,3 +139,8 @@ def test_call(expected, added_flags):
     run_integration_test(
         *cmd, expected_output=expected, overwrite_output=OVERWRITE_OUTPUT
     )
+
+
+def test_call_no_index_file():
+    with pytest.raises(FileNotFoundError):
+        nucflag.main.main([COMMAND, "-i", f"test/{COMMAND}/input/empty.bam"])

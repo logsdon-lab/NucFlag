@@ -202,6 +202,13 @@ def call_misassemblies(args: argparse.Namespace) -> int:
     window = _cfg_general.get("bp_wg_window", DEFAULT_WG_WINDOW)
     logger.info(f"Using config:\n{pprint.pformat(cfg, underscore_numbers=True)}")
 
+    # Check index files.
+    index_files = ("crai", "bai", "csi")
+    if not any(os.path.exists(f"{args.infile}.{idx}") for idx in index_files):
+        raise FileNotFoundError(
+            f"Index file {index_files} does not exist for {args.infile}"
+        )
+
     regions: list[tuple[int, int, str]] = get_regions(
         aln=args.infile,
         bed=args.input_regions.name if args.input_regions else None,
