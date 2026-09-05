@@ -21,7 +21,7 @@ def check_output(outputs: Outputs_To_Check, overwrite_output: bool) -> None:
             df_in_res = pl.read_csv(in_output, separator="\t")
 
         if overwrite_output:
-            df_in_res.write_csv(exp_output)
+            df_in_res.write_csv(exp_output, separator="\t", include_header=True)
             continue
 
         df_exp_res = pl.read_csv(exp_output, separator="\t")
