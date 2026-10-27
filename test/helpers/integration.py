@@ -21,7 +21,7 @@ def check_output(outputs: Outputs_To_Check, overwrite_output: bool) -> None:
             df_in_res = pl.read_csv(in_output, separator="\t")
 
         if overwrite_output:
-            df_in_res.write_csv(exp_output)
+            df_in_res.write_csv(exp_output, separator="\t", include_header=True)
             continue
 
         df_exp_res = pl.read_csv(exp_output, separator="\t")
@@ -50,8 +50,9 @@ def run_integration_test(
         process = subprocess.run(
             [*cmd],
             capture_output=True,
-            check=True,
         )
+        if process.returncode != 0:
+            raise RuntimeError(process.stderr.decode())
         res = pl.read_csv(process.stdout, separator="\t")
         outputs: Outputs_To_Check = [(res, expected_output)]
         check_output(outputs, overwrite_output)
@@ -61,10 +62,11 @@ def run_integration_test(
         outfile_names = [file.name for file in outfiles]
         new_cmd = [*cmd, *list(itertools.chain(*zip(flags, outfile_names)))]
         print(" ".join(new_cmd), file=sys.stderr)
-        subprocess.run(
+        process = subprocess.run(
             [*new_cmd],
-            check=True,
         )
+        if process.returncode != 0:
+            raise RuntimeError(process.stderr.decode())
         outputs = [out for out in zip(outfile_names, expected)]
         check_output(outputs, overwrite_output)
         for file in outfiles:
