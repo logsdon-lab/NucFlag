@@ -81,8 +81,9 @@ def group_dataframe_by_contiguous_itvs(df_region: pl.DataFrame) -> pl.DataFrame:
 
         grouped_rows.append(row)
 
+    schema = df_region.schema | {"group": pl.UInt64}
     return (
-        pl.DataFrame(grouped_rows, orient="row")
+        pl.DataFrame(grouped_rows, orient="row", schema=schema)
         .with_columns(
             length=pl.col("chromEnd") - pl.col("chromStart"),
             minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
