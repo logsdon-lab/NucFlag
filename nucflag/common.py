@@ -59,20 +59,31 @@ def group_dataframe_by_contiguous_itvs(df_region: pl.DataFrame) -> pl.DataFrame:
     """
     Group contiguous intervals. Any break creates a new group id.
     """
-    return (
+
+    rows = list(
         df_region.sort(by=["#chrom", "chromStart"])
-        .with_columns(
-            group=(pl.col("chromEnd") != pl.col("chromStart").shift(-1))
-            .fill_null(False)
-            .rle_id()
-            .over("#chrom"),
-        )
-        .with_columns(
-            group=pl.when(pl.col("group") % 2 != 0)
-            .then(pl.col("group") - 1)
-            .otherwise(pl.col("group"))
-            .over("#chrom")
-        )
+        .unique(maintain_order=True)
+        .iter_rows(named=True)
+    )
+    group_n = 0
+    grouped_rows = []
+    for i, row in enumerate(rows):
+        try:
+            next_row = rows[i + 1]
+        except IndexError:
+            row["group"] = group_n
+            grouped_rows.append(row)
+            continue
+
+        row["group"] = group_n
+        if row["chromEnd"] != next_row["chromStart"]:
+            group_n += 1
+
+        grouped_rows.append(row)
+
+    schema = df_region.schema | {"group": pl.UInt64}
+    return (
+        pl.DataFrame(grouped_rows, orient="row", schema=schema)
         .with_columns(
             length=pl.col("chromEnd") - pl.col("chromStart"),
             minStart=pl.col("chromStart").min().over(["#chrom", "group"]),
