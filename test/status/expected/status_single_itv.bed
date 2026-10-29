@@ -1,0 +1,4 @@
+#chrom	chromStart	chromEnd	status	correct	insertion	deletion	softclip	low_quality	het_or_mismap	collapse	misjoin	mismatch	false_dup	homopolymer	dinucleotide	simple_repeat	other_repeat	scaffold	QV
+chr10_haplotype1-0000003	58101542	58601539	correct	99.08599451596709	0.0	0.0	0.0	0.0	0.9140054840329043	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	inf
+chr10_haplotype1-0000003	72219071	72719069	correct	100.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	0.0	inf
+chr10_haplotype1-0000003	77219681	77541837	correct	99.99906877413427	0.0	0.0	0.0	0.0	0.0003104086219098822	0.0	0.0	0.0	0.0	0.0	0.0006208172438197644	0.0	0.0	0.0	52.070335324354026

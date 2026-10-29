@@ -166,7 +166,7 @@ def generate_status_from_regions(
             "chromEnd": pl.col("maxEnd").first(),
             "metric": expr_metric,
         }
-        cols_pivot_index = ["#chrom", "chromStart", "chromEnd"]
+        cols_pivot_index = ["#chrom", "group", "chromStart", "chromEnd"]
         cols_select = {
             "#chrom": pl.col("#chrom"),
             "chromStart": pl.col("chromStart"),

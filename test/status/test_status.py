@@ -47,6 +47,13 @@ OVERWRITE_OUTPUT = False
             f"test/{COMMAND}/expected/status_all.tsv{GZIP}",
             ["-g", "all"],
         ),
+        # Status where single interval group.
+        (
+            f"test/{COMMAND}/input/single_itv.bed.gz",
+            None,
+            f"test/{COMMAND}/expected/status_single_itv.bed{GZIP}",
+            [],
+        ),
     ],
 )
 def test_status(infile, bed, expected, added_flags):
