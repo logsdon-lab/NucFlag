@@ -16,7 +16,9 @@ pip install nucflag>=1.0.0
 Align long-reads to assembly.
 ```bash
 # Align long reads to assembly generated from those reads.
-minimap2 -x lr:hqae -I 8G asm.fa.gz reads.fq.gz | samtools view -bh -o asm.bam
+minimap2 -ax lr:hqae --eqx asm.fa.gz reads.fq.gz | \
+    samtools view -F 2308 -u - | \
+    samtools sort -o asm.bam
 samtools index asm.bam
 ```
 
